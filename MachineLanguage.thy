@@ -16,7 +16,7 @@ datatype instruction =
   AInstr int
 | CInstr "register set" computation "comparison set"
 
-type_synonym program_state = "memory \<times> int \<times> int \<times> nat" (* A, D, PC *)
+type_synonym machine_state = "memory \<times> int \<times> int \<times> nat" (* M, A, D, PC *)
 
 fun should_jump :: "int \<Rightarrow> comparison set \<Rightarrow> bool" where
   "should_jump n jmp = ((LT \<in> jmp \<and> n < 0) \<or> (EQ \<in> jmp \<and> n = 0) \<or> (GT \<in> jmp \<and> n > 0 ))"
@@ -51,7 +51,7 @@ fun compute :: "computation \<Rightarrow> int \<Rightarrow> int \<Rightarrow> in
 | "compute DOrA m a d = (if d \<noteq> 0 \<or> a \<noteq> 0 then 1 else 0)"
 | "compute DOrM m a d = (if d \<noteq> 0 \<or> m \<noteq> 0 then 1 else 0)"
 
-fun eval_instruction :: "instruction \<Rightarrow> program_state \<Rightarrow> program_state" where
+fun eval_instruction :: "instruction \<Rightarrow> machine_state \<Rightarrow> machine_state" where
   "eval_instruction (AInstr x) (\<sigma>, a, d, pc) = (\<sigma>, x, d, Suc pc)"
 | "eval_instruction (CInstr dst cmp jmp) (\<sigma>, a, d, pc) = (
     let n = compute cmp (\<sigma> (nat a)) a d
@@ -60,14 +60,10 @@ fun eval_instruction :: "instruction \<Rightarrow> program_state \<Rightarrow> p
         if D \<in> dst then n else d, 
         if should_jump n jmp then nat a else Suc pc))"
 
-fun eval :: "instruction list \<Rightarrow> program_state \<Rightarrow> program_state option" where
+fun eval :: "instruction list \<Rightarrow> machine_state \<Rightarrow> machine_state option" where
   "eval \<Pi> (\<sigma>, a, d, pc) = (
     if pc \<ge> 0 \<and> pc < length \<Pi> 
     then Some (eval_instruction (\<Pi> ! pc) (\<sigma>, a, d, pc)) 
     else None)"
-
-inductive evals :: "instruction list \<Rightarrow> program_state \<Rightarrow> program_state \<Rightarrow> bool" where
-  "eval \<Pi> \<sigma> = Some \<sigma>\<^sub>1 \<Longrightarrow> evals \<Pi> \<sigma>\<^sub>1 \<sigma>\<^sub>2 \<Longrightarrow> evals \<Pi> \<sigma> \<sigma>\<^sub>2"
-| "eval \<Pi> \<sigma> = None \<Longrightarrow> evals \<Pi> \<sigma> \<sigma>"
 
 end
