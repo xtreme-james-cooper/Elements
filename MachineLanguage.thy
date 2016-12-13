@@ -62,7 +62,7 @@ fun eval_instruction :: "instruction \<Rightarrow> machine_state \<Rightarrow> m
 
 fun eval :: "instruction list \<Rightarrow> machine_state \<Rightarrow> machine_state option" where
   "eval \<Pi> (\<sigma>, a, d, pc) = (
-    if pc \<ge> 0 \<and> pc < length \<Pi> 
+    if pc < length \<Pi> 
     then Some (eval_instruction (\<Pi> ! pc) (\<sigma>, a, d, pc)) 
     else None)"
 
