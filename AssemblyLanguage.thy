@@ -50,6 +50,20 @@ definition get_assembly :: "program \<Rightarrow> assembly list" where
 definition program_convert :: "program \<Rightarrow> instruction list" where
   "program_convert \<Pi> = map (instruction_conv (build_symbol_table \<Pi>)) (get_assembly \<Pi>)"
 
+(* conversion safety typecheck *)
+
+datatype acc_type = Number | Symbol
+
+fun typecheck_assembly :: "assembly list \<Rightarrow> acc_type \<Rightarrow> bool" where
+  "typecheck_assembly [] t = True"
+| "typecheck_assembly (AAssm x # \<pi>) t = typecheck_assembly \<pi> Number"
+| "typecheck_assembly (SAssm x # \<pi>) t = typecheck_assembly \<pi> Symbol"
+| "typecheck_assembly (CAssm dst cmp jmp # \<pi>) Number = (jmp = {} \<and> typecheck_assembly \<pi> Number)"
+| "typecheck_assembly (CAssm dst cmp jmp # \<pi>) Symbol = (dst = {} \<and> typecheck_assembly \<pi> Symbol)"
+
+definition typecheck_program :: "program \<Rightarrow> bool" where
+  "typecheck_program \<Pi> = (\<forall>\<pi> \<in> ran (lookup \<Pi>). typecheck_assembly \<pi> Symbol)"
+
 definition get_pc :: "program \<Rightarrow> assembly list \<Rightarrow> nat set" where
   "get_pc \<Pi> \<pi> = { the (build_symbol_table \<Pi> s) + length \<pi>' | s \<pi>'. lookup \<Pi> s = Some (\<pi>' @ \<pi>) }"
 
@@ -128,7 +142,8 @@ lemma [simp]: "pc \<in> get_pc \<Pi> (a # \<pi>) \<Longrightarrow> Suc pc \<in> 
   qed
 
 lemma eval_assembly_conv [simp]: "eval_assembly \<Pi> \<sigma> = Some \<sigma>\<^sub>1 \<Longrightarrow> \<sigma>' \<in> state_convert \<Pi> \<sigma> \<Longrightarrow>
-    \<exists>\<sigma>\<^sub>1'. \<sigma>\<^sub>1' \<in> state_convert \<Pi> \<sigma>\<^sub>1 \<and> eval (program_convert \<Pi>) \<sigma>' = Some \<sigma>\<^sub>1'"
+    typecheck_program \<Pi> \<Longrightarrow> 
+      \<exists>\<sigma>\<^sub>1'. \<sigma>\<^sub>1' \<in> state_convert \<Pi> \<sigma>\<^sub>1 \<and> eval (program_convert \<Pi>) \<sigma>' = Some \<sigma>\<^sub>1'"
   proof (induction \<Pi> \<sigma> rule: eval_assembly.induct)
   case 1
     thus ?case by simp
@@ -137,11 +152,12 @@ lemma eval_assembly_conv [simp]: "eval_assembly \<Pi> \<sigma> = Some \<sigma>\<
   next case 3
     thus ?case by auto
   next case (4 \<Pi> \<sigma> a d s dst cmp jmp \<pi>)
-    thus ?case by simp
+    thus ?case by auto
   qed
 
-theorem [simp]: "iterate (eval_assembly \<Pi>) \<sigma> \<sigma>\<^sub>1 \<Longrightarrow> \<sigma>' \<in> state_convert \<Pi> \<sigma> \<Longrightarrow>
-    \<exists>\<sigma>\<^sub>1'. \<sigma>\<^sub>1' \<in> state_convert \<Pi> \<sigma>\<^sub>1 \<and> iterate (eval (program_convert \<Pi>)) \<sigma>' \<sigma>\<^sub>1'"
+theorem [simp]: "iterate (eval_assembly \<Pi>) \<sigma> \<sigma>\<^sub>1 \<Longrightarrow> \<sigma>' \<in> state_convert \<Pi> \<sigma> \<Longrightarrow> 
+    typecheck_program \<Pi> \<Longrightarrow> 
+      \<exists>\<sigma>\<^sub>1'. \<sigma>\<^sub>1' \<in> state_convert \<Pi> \<sigma>\<^sub>1 \<and> iterate (eval (program_convert \<Pi>)) \<sigma>' \<sigma>\<^sub>1'"
   proof (induction "eval_assembly \<Pi>" \<sigma> \<sigma>\<^sub>1 arbitrary: \<sigma>' rule: iterate.induct)
   case iter_refl
     thus ?case by fastforce
