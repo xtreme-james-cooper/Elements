@@ -2,7 +2,7 @@ theory MachineLanguage
 imports Main
 begin
 
-type_synonym memory = "nat \<Rightarrow> int"
+type_synonym memory = "int \<Rightarrow> int"
 
 datatype register = A | D | M
 
@@ -54,8 +54,8 @@ fun compute :: "computation \<Rightarrow> int \<Rightarrow> int \<Rightarrow> in
 fun eval_instruction :: "instruction \<Rightarrow> machine_state \<Rightarrow> machine_state" where
   "eval_instruction (AInstr x) (\<sigma>, a, d, pc) = (\<sigma>, x, d, Suc pc)"
 | "eval_instruction (CInstr dst cmp jmp) (\<sigma>, a, d, pc) = (
-    let n = compute cmp (\<sigma> (nat a)) a d
-    in (if M \<in> dst then \<sigma>(nat a := n) else \<sigma>, 
+    let n = compute cmp (\<sigma> a) a d
+    in (if M \<in> dst then \<sigma>(a := n) else \<sigma>, 
         if A \<in> dst then n else a, 
         if D \<in> dst then n else d, 
         if should_jump n jmp then nat a else Suc pc))"

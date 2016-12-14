@@ -17,9 +17,9 @@ fun eval_assembly :: "program \<Rightarrow> assembly_state \<Rightarrow> assembl
   "eval_assembly \<Pi> (\<sigma>, a, d, []) = None"
 | "eval_assembly \<Pi> (\<sigma>, a, d, AAssm x # \<pi>) = Some (\<sigma>, x, d, \<pi>)"
 | "eval_assembly \<Pi> (\<sigma>, a, d, CAssm dst cmp # \<pi>) = (
-    let n = compute cmp (\<sigma> (nat a)) a d
+    let n = compute cmp (\<sigma> a) a d
     in Some (
-      if M \<in> dst then \<sigma>(nat a := n) else \<sigma>, 
+      if M \<in> dst then \<sigma>(a := n) else \<sigma>, 
       if A \<in> dst then n else a, 
       if D \<in> dst then n else d, 
       \<pi>))"
@@ -32,11 +32,17 @@ fun eval_assembly :: "program \<Rightarrow> assembly_state \<Rightarrow> assembl
 
 (* conversion *)
 
+fun get_converted_length :: "assembly list \<Rightarrow> nat" where
+  "get_converted_length [] = 0"
+| "get_converted_length (AAssm x # \<pi>) = Suc (get_converted_length \<pi>)"
+| "get_converted_length (CAssm dst cmp # \<pi>) = Suc (get_converted_length \<pi>)"
+| "get_converted_length (JAssm jmp s # \<pi>) = Suc (Suc (get_converted_length \<pi>))"
+
 fun build_symbol_table :: "program \<Rightarrow> symbol \<rightharpoonup> nat" where
   "build_symbol_table [] s = None"
 | "build_symbol_table ((s', \<pi>) # \<Pi>) s = (
     if s' = s then Some 0 
-    else map_option (op + (length \<pi>)) (build_symbol_table \<Pi> s))"
+    else map_option (op + (get_converted_length \<pi>)) (build_symbol_table \<Pi> s))"
 
 definition get_block_addr :: "(symbol \<rightharpoonup> nat) \<Rightarrow> symbol \<Rightarrow> int" where
   "get_block_addr \<rho> s = int (the (\<rho> s))"
@@ -63,62 +69,40 @@ fun state_convert :: "program \<Rightarrow> assembly_state \<Rightarrow> machine
 lemma [simp]: "lookup \<Pi> s = Some \<pi> \<Longrightarrow> \<exists>n. build_symbol_table \<Pi> s = Some n"
   by (induction \<Pi> s rule: lookup.induct) auto
 
-lemma [simp]: "lookup \<Pi> s = Some \<pi> \<Longrightarrow> n < length \<pi> \<Longrightarrow> 
-    the (build_symbol_table \<Pi> s) + n < length (get_assembly \<Pi>)"
-  proof (induction \<Pi> s rule: build_symbol_table.induct)
-  case 1
-    thus ?case by simp
-  next case (2 s' \<pi>' \<Pi> s)
-    thus ?case
-      proof (cases "s' = s")
-      case True
-        with 2 show ?thesis by (simp add: get_assembly_def)
-      next case False
-        with 2 obtain m where "build_symbol_table \<Pi> s = Some m" by fastforce
-        with 2 False show ?thesis by (simp add: get_assembly_def)
-      qed
-  qed
+lemma convert_expands [simp]: "length \<pi> \<le> get_converted_length \<pi>"
+  by (induction \<pi> rule: get_converted_length.induct) simp_all
 
-lemma [simp]: "1 \<le> length (instruction_conv \<rho> a)"
-  by (induction a) simp_all
-
-lemma [simp]: "length \<pi> \<le> length (concat (map (instruction_conv \<rho>) \<pi>))"
-  apply (induction \<pi>) apply simp_all by simp
+lemma [simp]: "length (concat (map (instruction_conv \<rho>) \<pi>)) = get_converted_length \<pi>"
+  by (induction \<pi> rule: get_converted_length.induct) simp_all
 
 lemma [simp]: "lookup \<Pi> s = Some (\<pi> @ \<pi>') \<Longrightarrow> \<pi>' \<noteq> [] \<Longrightarrow>
     the (build_symbol_table \<Pi> s) + length \<pi> < length (program_convert \<Pi>)"
   proof (induction \<Pi> s rule: build_symbol_table.induct)
   case 1
     thus ?case by simp
-  next case (2 s' \<pi>' \<Pi> s)
-    thus ?case
+  next case (2 s' \<pi>'' \<Pi> s)
+    let ?\<rho> = "build_symbol_table ((s', \<pi>'') # \<Pi>)"
+    show ?case
       proof (cases "s' = s")
       case True
-        with 2 show ?thesis apply (simp add: program_convert_def get_assembly_def) by simp
+        from 2 have "0 < length \<pi>'" by simp 
+        hence X: "0 < get_converted_length \<pi>'" by (metis convert_expands gr0I leD)
+        have "length \<pi> \<le> get_converted_length \<pi>" by simp
+        with X have "length \<pi> < get_converted_length \<pi> + get_converted_length \<pi>'" by linarith
+        with 2 True show ?thesis by (simp add: program_convert_def get_assembly_def)
       next case False
-        with 2 obtain m where "build_symbol_table \<Pi> s = Some m" by fastforce
-        with 2 False show ?thesis by (simp add: program_convert_def get_assembly_def)
+        with 2 obtain n where "build_symbol_table \<Pi> s = Some n" by fastforce
+        with 2 False show ?thesis 
+          by (simp add: program_convert_def get_assembly_def add.assoc add_le_less_mono)
       qed
   qed
 
-lemma [simp]: "lookup \<Pi> s = Some \<pi> \<Longrightarrow> n < length \<pi> \<Longrightarrow>  
-    get_assembly \<Pi> ! (the (build_symbol_table \<Pi> s) + n) = \<pi> ! n"
-  proof (induction \<Pi> s rule: build_symbol_table.induct)
-  case 1
-    thus ?case by simp
-  next case (2 s' \<pi>' \<Pi> s)
-    thus ?case
-      proof (cases "s' = s")
-      case True
-        with 2 show ?thesis by (simp add: get_assembly_def nth_append)
-      next case False
-        with 2 obtain m where "build_symbol_table \<Pi> s = Some m" by fastforce
-        with 2 False show ?thesis by (simp add: get_assembly_def add.assoc)      
-      qed
-  qed
+lemma [simp]: "pc \<in> get_pc \<Pi> (a # \<pi>) \<Longrightarrow>
+    program_convert \<Pi> ! pc = hd (instruction_conv (build_symbol_table \<Pi>) a)"
+  by (auto simp add: get_pc_def program_convert_def)
 
-lemma [simp]: "pc \<in> get_pc \<Pi> (a # \<pi>) \<Longrightarrow> i < length (instruction_conv (build_symbol_table \<Pi>) a) \<Longrightarrow>
-    program_convert \<Pi> ! (pc + i) = instruction_conv (build_symbol_table \<Pi>) a ! i"
+lemma [simp]: "pc \<in> get_pc \<Pi> (a # \<pi>) \<Longrightarrow> length (instruction_conv (build_symbol_table \<Pi>) a) = 1 \<Longrightarrow>
+    program_convert \<Pi> ! (Suc pc) = hd (tl (instruction_conv (build_symbol_table \<Pi>) a))"
   by (auto simp add: get_pc_def program_convert_def)
 
 lemma [simp]: "pc \<in> get_pc \<Pi> (a # \<pi>) \<Longrightarrow> pc < length (program_convert \<Pi>)"
@@ -140,9 +124,20 @@ lemma eval_assembly_conv [simp]: "eval_assembly \<Pi> \<Sigma> = Some \<Sigma>\<
   case 1
     thus ?case by simp
   next case 2
-    thus ?case by simp
-  next case 3
-    thus ?case by simp
+    thus ?case by auto
+  next case (3 \<Pi> \<sigma> a d dst cmp \<pi>)
+    let ?n = "compute cmp (\<sigma> a) a d"
+    from 3 have S: " \<Sigma>\<^sub>1 = (
+      if M \<in> dst then \<sigma>(a := ?n) else \<sigma>, 
+      if A \<in> dst then ?n else a, 
+      if D \<in> dst then ?n else d, 
+      \<pi>)" by (simp add: Let_def)
+    from 3 have "\<Sigma>' \<in> state_convert \<Pi> (\<sigma>, a, d, CAssm dst cmp # \<pi>)" by simp
+
+
+    have "\<Sigma>\<^sub>1' \<in> (\<lambda>pc. (if M \<in> dst then \<sigma>(a := ?n) else \<sigma>, if A \<in> dst then ?n else a, if D \<in> dst then ?n else d, pc)) ` get_pc \<Pi> \<pi> \<and> 
+      eval (program_convert \<Pi>) \<Sigma>' = Some \<Sigma>\<^sub>1'" by simp
+    with S show ?case by fastforce
   next case 4
     thus ?case by simp
   qed
