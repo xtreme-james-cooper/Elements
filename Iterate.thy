@@ -13,6 +13,14 @@ lemma [elim]: "f x = Some y \<Longrightarrow> iterate f x y"
     ultimately show "iterate f x y" by (metis iter_step)
   qed
 
+lemma [elim]: "f x = Some y \<Longrightarrow> f y = Some z \<Longrightarrow> iterate f x z"
+  proof -
+    assume "f x = Some y"
+    moreover assume "f y = Some z"
+    moreover have "iterate f x x" by simp
+    ultimately show "iterate f x z" by (metis iter_step)
+  qed
+
 lemma [elim]: "iterate f y z \<Longrightarrow> f x = Some y \<Longrightarrow> iterate f x z"
   by (induction f y z rule: iterate.induct) auto
 
