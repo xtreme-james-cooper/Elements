@@ -33,17 +33,17 @@ fun eval_assembly :: "program \<Rightarrow> assembly_state \<Rightarrow> assembl
 
 (* conversion *)
 
-fun get_converted_length :: "assembly list \<Rightarrow> nat" where
-  "get_converted_length [] = 0"
-| "get_converted_length (AAssm x # \<pi>) = Suc (get_converted_length \<pi>)"
-| "get_converted_length (CAssm dst cmp # \<pi>) = Suc (get_converted_length \<pi>)"
-| "get_converted_length (JAssm jmp s # \<pi>) = Suc (Suc (get_converted_length \<pi>))"
+fun converted_length :: "assembly list \<Rightarrow> nat" where
+  "converted_length [] = 0"
+| "converted_length (AAssm x # \<pi>) = Suc (converted_length \<pi>)"
+| "converted_length (CAssm dst cmp # \<pi>) = Suc (converted_length \<pi>)"
+| "converted_length (JAssm jmp s # \<pi>) = Suc (Suc (converted_length \<pi>))"
 
 fun build_symbol_table :: "program \<Rightarrow> symbol \<rightharpoonup> nat" where
   "build_symbol_table [] s = None"
 | "build_symbol_table ((s', \<pi>) # \<Pi>) s = (
     if s' = s then Some 0 
-    else map_option (op + (get_converted_length \<pi>)) (build_symbol_table \<Pi> s))"
+    else map_option (op + (converted_length \<pi>)) (build_symbol_table \<Pi> s))"
 
 definition get_block_addr :: "(symbol \<rightharpoonup> nat) \<Rightarrow> symbol \<Rightarrow> int" where
   "get_block_addr \<rho> s = int (the (\<rho> s))"
@@ -60,7 +60,8 @@ definition program_convert :: "program \<Rightarrow> instruction list" where
   "program_convert \<Pi> = concat (map (instruction_conv (build_symbol_table \<Pi>)) (get_assembly \<Pi>))"
 
 definition get_pc :: "program \<Rightarrow> assembly list \<Rightarrow> nat set" where
-  "get_pc \<Pi> \<pi> = { the (build_symbol_table \<Pi> s) + length \<pi>' | s \<pi>'. lookup \<Pi> s = Some (\<pi>' @ \<pi>) }"
+  "get_pc \<Pi> \<pi> = 
+    { the (build_symbol_table \<Pi> s) + converted_length \<pi>' | s \<pi>'. lookup \<Pi> s = Some (\<pi>' @ \<pi>) }"
 
 fun state_convert :: "program \<Rightarrow> assembly_state \<Rightarrow> machine_state set" where
   "state_convert \<Pi> (\<sigma>, Some a, d, \<pi>) = {(\<sigma>, a, d, pc) | pc. pc \<in> get_pc \<Pi> \<pi>}"
@@ -72,18 +73,13 @@ lemma [simp]: "lookup \<Pi> s = Some \<pi> \<Longrightarrow> \<exists>n. build_s
   by (induction \<Pi> s rule: lookup.induct) auto
 
 lemma [simp]: "lookup \<Pi> s = Some \<pi> \<Longrightarrow> nat (get_block_addr (build_symbol_table \<Pi>) s) \<in> get_pc \<Pi> \<pi>" 
-  proof (induction \<Pi> s rule: lookup.induct)
-  case 1
-    thus ?case by simp
-  next case 2
-    thus ?case by simp
-  qed
+  by (induction \<Pi> s rule: lookup.induct) (auto simp add: get_block_addr_def get_pc_def)
 
-lemma convert_expands [simp]: "length \<pi> \<le> get_converted_length \<pi>"
-  by (induction \<pi> rule: get_converted_length.induct) simp_all
+lemma convert_expands [simp]: "length \<pi> \<le> converted_length \<pi>"
+  by (induction \<pi> rule: converted_length.induct) simp_all
 
-lemma [simp]: "length (concat (map (instruction_conv \<rho>) \<pi>)) = get_converted_length \<pi>"
-  by (induction \<pi> rule: get_converted_length.induct) simp_all
+lemma [simp]: "length (concat (map (instruction_conv \<rho>) \<pi>)) = converted_length \<pi>"
+  by (induction \<pi> rule: converted_length.induct) simp_all
 
 lemma [simp]: "lookup \<Pi> s = Some (\<pi> @ \<pi>') \<Longrightarrow> \<pi>' \<noteq> [] \<Longrightarrow>
     the (build_symbol_table \<Pi> s) + length \<pi> < length (program_convert \<Pi>)"
@@ -91,14 +87,13 @@ lemma [simp]: "lookup \<Pi> s = Some (\<pi> @ \<pi>') \<Longrightarrow> \<pi>' \
   case 1
     thus ?case by simp
   next case (2 s' \<pi>'' \<Pi> s)
-    let ?\<rho> = "build_symbol_table ((s', \<pi>'') # \<Pi>)"
     show ?case
       proof (cases "s' = s")
       case True
         from 2 have "0 < length \<pi>'" by simp 
-        hence X: "0 < get_converted_length \<pi>'" by (metis convert_expands gr0I leD)
-        have "length \<pi> \<le> get_converted_length \<pi>" by simp
-        with X have "length \<pi> < get_converted_length \<pi> + get_converted_length \<pi>'" by linarith
+        hence X: "0 < converted_length \<pi>'" by (metis convert_expands gr0I leD)
+        have "length \<pi> \<le> converted_length \<pi>" by simp
+        with X have "length \<pi> < converted_length \<pi> + converted_length \<pi>'" by linarith
         with 2 True show ?thesis by (simp add: program_convert_def get_assembly_def)
       next case False
         with 2 obtain n where "build_symbol_table \<Pi> s = Some n" by fastforce
@@ -108,41 +103,67 @@ lemma [simp]: "lookup \<Pi> s = Some (\<pi> @ \<pi>') \<Longrightarrow> \<pi>' \
   qed
 
 lemma [simp]: "pc \<in> get_pc \<Pi> (a # \<pi>) \<Longrightarrow> pc < length (program_convert \<Pi>)"
-  by (auto simp add: get_pc_def)
+  proof -
+    assume "pc \<in> get_pc \<Pi> (a # \<pi>)"
+    hence "pc \<in> { the (build_symbol_table \<Pi> s) + converted_length \<pi>' | s \<pi>'. lookup \<Pi> s = Some (\<pi>' @ a # \<pi>) }" by (simp add: get_pc_def)
+
+
+    show "pc < length (program_convert \<Pi>)" by simp
+  qed
 
 lemma [simp]: "pc \<in> get_pc \<Pi> (JAssm jmp s # \<pi>) \<Longrightarrow> Suc pc < length (program_convert \<Pi>)"
-  by (auto simp add: get_pc_def)
+  proof -
+    assume "pc \<in> get_pc \<Pi> (JAssm jmp s # \<pi>)"
+    hence "pc \<in> { the (build_symbol_table \<Pi> s) + converted_length \<pi>' | s \<pi>'. lookup \<Pi> s = Some (\<pi>' @ JAssm jmp s # \<pi>) }" by (simp add: get_pc_def)
+
+    show "Suc pc < length (program_convert \<Pi>)" by simp
+  qed
 
 lemma lookup_convert: "pc \<in> get_pc \<Pi> (a # \<pi>) \<Longrightarrow> 
   i < length (instruction_conv (build_symbol_table \<Pi>) a) \<Longrightarrow>
     program_convert \<Pi> ! (pc + i) = instruction_conv (build_symbol_table \<Pi>) a ! i"
   proof -
-    assume "i < length (instruction_conv (build_symbol_table \<Pi>) a)"
+    let ?\<rho> = "build_symbol_table \<Pi>"
+    assume "i < length (instruction_conv ?\<rho> a)"
     assume "pc \<in> get_pc \<Pi> (a # \<pi>)" 
-    then obtain s \<pi>' where P :"pc = the (build_symbol_table \<Pi> s) + length \<pi>' \<and> 
-      lookup \<Pi> s = Some (\<pi>' @ a # \<pi>)" by (auto simp add: get_pc_def)
+    then obtain s \<pi>' where P: "pc = the (?\<rho> s) + converted_length \<pi>' \<and> lookup \<Pi> s = Some (\<pi>' @ a # \<pi>)" by (auto simp add: get_pc_def)
 
 
-    have "concat (map (instruction_conv (build_symbol_table \<Pi>)) (get_assembly \<Pi>)) ! (the (build_symbol_table \<Pi> s) + length \<pi>' + i) = 
-      instruction_conv (build_symbol_table \<Pi>) a ! i" by simp
+    have "concat (map (instruction_conv ?\<rho>) (get_assembly \<Pi>)) ! (the (?\<rho> s) + converted_length \<pi>' + i) = 
+      instruction_conv ?\<rho> a ! i" by simp
     with P show ?thesis by (simp add: program_convert_def)
   qed
 
-lemma [simp]: "pc \<in> get_pc \<Pi> (a # \<pi>) \<Longrightarrow> Suc pc \<in> get_pc \<Pi> \<pi>"
+lemma [simp]: "converted_length (\<pi> @ \<pi>') = converted_length \<pi> + converted_length \<pi>'"
+  by (induction \<pi> rule: converted_length.induct) simp_all
+
+lemma [simp]: "pc \<in> get_pc \<Pi> (AAssm x # \<pi>) \<Longrightarrow> Suc pc \<in> get_pc \<Pi> \<pi>"
   proof -
-    assume "pc \<in> get_pc \<Pi> (a # \<pi>)"
-    then obtain s \<pi>' where P: "pc = the (build_symbol_table \<Pi> s) + length \<pi>' \<and> 
-      lookup \<Pi> s = Some (\<pi>' @ a # \<pi>)" by (auto simp add: get_pc_def)
-    hence "the (build_symbol_table \<Pi> s) + length (\<pi>' @ [a]) \<in> 
-      { the (build_symbol_table \<Pi> s) + length \<pi>' | s \<pi>'. lookup \<Pi> s = Some (\<pi>' @ \<pi>) }" by fastforce
-    with P show ?thesis by (simp add: get_pc_def)
+    assume "pc \<in> get_pc \<Pi> (AAssm x # \<pi>)"
+    then obtain s \<pi>' where P: "pc = the (build_symbol_table \<Pi> s) + converted_length \<pi>' \<and> 
+      lookup \<Pi> s = Some (\<pi>' @ AAssm x # \<pi>)" by (auto simp add: get_pc_def)
+    with P have "Suc pc = the (build_symbol_table \<Pi> s) + converted_length (\<pi>' @ [AAssm x])" by simp
+    with P get_pc_def show ?thesis by fastforce
+  qed
+
+lemma [simp]: "pc \<in> get_pc \<Pi> (CAssm dst cmp # \<pi>) \<Longrightarrow> Suc pc \<in> get_pc \<Pi> \<pi>"
+  proof -
+    assume "pc \<in> get_pc \<Pi> (CAssm dst cmp # \<pi>)"
+    then obtain s \<pi>' where P: "pc = the (build_symbol_table \<Pi> s) + converted_length \<pi>' \<and> 
+      lookup \<Pi> s = Some (\<pi>' @ CAssm dst cmp # \<pi>)" by (auto simp add: get_pc_def)
+    with P have "Suc pc = the (build_symbol_table \<Pi> s) + converted_length (\<pi>' @ [CAssm dst cmp])" 
+      by simp
+    with P get_pc_def show ?thesis by fastforce
   qed
 
 lemma [simp]: "pc \<in> get_pc \<Pi> (JAssm jmp s # \<pi>) \<Longrightarrow> Suc (Suc pc) \<in> get_pc \<Pi> \<pi>"
   proof -
     assume "pc \<in> get_pc \<Pi> (JAssm jmp s # \<pi>)"
-    have "Suc (Suc pc) \<in> get_pc \<Pi> \<pi>" by simp
-    thus ?thesis by simp
+    then obtain s' \<pi>' where P: "pc = the (build_symbol_table \<Pi> s') + converted_length \<pi>' \<and> 
+      lookup \<Pi> s' = Some (\<pi>' @ JAssm jmp s # \<pi>)" by (auto simp add: get_pc_def)
+    with P have "Suc (Suc pc) = 
+      the (build_symbol_table \<Pi> s') + converted_length (\<pi>' @ [JAssm jmp s])" by simp
+    with P get_pc_def show ?thesis by fastforce
   qed
 
 lemma [simp]: "\<Sigma> \<in> state_convert \<Pi> (\<sigma>, a, d, \<pi>) \<Longrightarrow> \<exists>aa pc. \<Sigma> = (\<sigma>, aa, d, pc) \<and> pc \<in> get_pc \<Pi> \<pi>"
