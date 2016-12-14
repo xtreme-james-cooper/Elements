@@ -2,11 +2,14 @@ theory Assembler
 imports AssemblyLanguage MachineLanguage Iterate
 begin
 
-fun converted_length :: "assembly list \<Rightarrow> nat" where
+primrec machine_length :: "assembly \<Rightarrow> nat" where
+  "machine_length (AAssm x) = 1"
+| "machine_length (CAssm dst cmp) = 1"
+| "machine_length (JAssm jmp s) = 2"
+
+primrec converted_length :: "assembly list \<Rightarrow> nat" where
   "converted_length [] = 0"
-| "converted_length (AAssm x # \<pi>) = Suc (converted_length \<pi>)"
-| "converted_length (CAssm dst cmp # \<pi>) = Suc (converted_length \<pi>)"
-| "converted_length (JAssm jmp s # \<pi>) = Suc (Suc (converted_length \<pi>))"
+| "converted_length (a # \<pi>) = machine_length a + converted_length \<pi>"
 
 fun build_symbol_table :: "program \<Rightarrow> symbol \<rightharpoonup> nat" where
   "build_symbol_table [] s = None"
@@ -44,63 +47,70 @@ lemma [simp]: "lookup \<Pi> s = Some \<pi> \<Longrightarrow> \<exists>n. build_s
 lemma [simp]: "lookup \<Pi> s = Some \<pi> \<Longrightarrow> nat (get_block_addr (build_symbol_table \<Pi>) s) \<in> get_pc \<Pi> \<pi>" 
   by (induction \<Pi> s rule: lookup.induct) (auto simp add: get_block_addr_def get_pc_def)
 
-lemma always_at_least_one [simp]: "0 < length (instruction_conv (build_symbol_table \<Pi>) a)"
+lemma [simp]: "length (instruction_conv \<rho> a) = machine_length a"
   by (induction a) simp_all
 
 lemma convert_expands [simp]: "length \<pi> \<le> converted_length \<pi>"
-  by (induction \<pi> rule: converted_length.induct) simp_all
+  proof (induction \<pi>)
+  case Nil
+    thus ?case by simp
+  case (Cons a \<pi>)
+    thus ?case by (induction a) simp_all
+  qed
 
 lemma [simp]: "length (concat (map (instruction_conv \<rho>) \<pi>)) = converted_length \<pi>"
-  by (induction \<pi> rule: converted_length.induct) simp_all
+  by (induction \<pi>) simp_all
 
-lemma [simp]: "lookup \<Pi> s = Some (\<pi> @ \<pi>') \<Longrightarrow> \<pi>' \<noteq> [] \<Longrightarrow>
-    the (build_symbol_table \<Pi> s) + length \<pi> < length (program_convert \<Pi>)"
-  proof (induction \<Pi> s rule: build_symbol_table.induct)
-  case 1
-    thus ?case by simp
-  next case (2 s' \<pi>'' \<Pi> s)
-    show ?case
-      proof (cases "s' = s")
-      case True
-        from 2 have "0 < length \<pi>'" by simp 
-        hence X: "0 < converted_length \<pi>'" by (metis convert_expands gr0I leD)
-        have "length \<pi> \<le> converted_length \<pi>" by simp
-        with X have "length \<pi> < converted_length \<pi> + converted_length \<pi>'" by linarith
-        with 2 True show ?thesis by (simp add: program_convert_def get_assembly_def)
-      next case False
-        with 2 obtain n where "build_symbol_table \<Pi> s = Some n" by fastforce
-        with 2 False show ?thesis 
-          by (simp add: program_convert_def get_assembly_def add.assoc add_le_less_mono)
-      qed
-  qed
+lemma [simp]: "converted_length (\<pi> @ \<pi>') = converted_length \<pi> + converted_length \<pi>'"
+  by (induction \<pi>) simp_all
 
 lemma pc_within: "pc \<in> get_pc \<Pi> (a # \<pi>) \<Longrightarrow> 
     i < length (instruction_conv (build_symbol_table \<Pi>) a) \<Longrightarrow> i + pc < length (program_convert \<Pi>)"
-  by simp
+  proof -
+    assume "pc \<in> get_pc \<Pi> (a # \<pi>)" 
+    then obtain s \<pi>' where P: "pc = the (build_symbol_table \<Pi> s) + converted_length \<pi>'" 
+      and L: "lookup \<Pi> s = Some (\<pi>' @ a # \<pi>)" by (auto simp add: get_pc_def)
+    assume "i < length (instruction_conv (build_symbol_table \<Pi>) a)"
+    hence "i < machine_length a" by simp
+    with L have "i + the (build_symbol_table \<Pi> s) + converted_length \<pi>' < 
+        length (program_convert \<Pi>)"
+      proof (induction \<Pi> s rule: build_symbol_table.induct)
+      case 1
+        thus ?case by simp
+      next case (2 s' \<pi>'' \<Pi> s)
+        thus ?case
+          proof (cases "s' = s")
+          case True
+            with 2 show ?thesis by (simp add: program_convert_def get_assembly_def)
+          next case False
+            with 2 show ?thesis
+              by (cases "build_symbol_table \<Pi> s") 
+                 (simp_all add: program_convert_def get_assembly_def)
+          qed
+      qed
+    with P show ?thesis by simp
+  qed
 
 lemma [simp]: "pc \<in> get_pc \<Pi> (a # \<pi>) \<Longrightarrow> pc < length (program_convert \<Pi>)"
-  using always_at_least_one pc_within by fastforce
+  using pc_within by (induction a) fastforce+
 
 lemma [simp]: "pc \<in> get_pc \<Pi> (JAssm jmp s # \<pi>) \<Longrightarrow> Suc pc < length (program_convert \<Pi>)"
   using pc_within by fastforce
 
-lemma lookup_convert: "pc \<in> get_pc \<Pi> (a # \<pi>) \<Longrightarrow> 
-  i < length (instruction_conv (build_symbol_table \<Pi>) a) \<Longrightarrow>
+lemma lookup_convert: "pc \<in> get_pc \<Pi> (a # \<pi>) \<Longrightarrow> i < machine_length a \<Longrightarrow>
     program_convert \<Pi> ! (pc + i) = instruction_conv (build_symbol_table \<Pi>) a ! i"
   proof -
     let ?\<rho> = "build_symbol_table \<Pi>"
-    assume "i < length (instruction_conv ?\<rho> a)"
+    assume "i < machine_length a"
     assume "pc \<in> get_pc \<Pi> (a # \<pi>)" 
-    then obtain s \<pi>' where P: "pc = the (?\<rho> s) + converted_length \<pi>' \<and> lookup \<Pi> s = Some (\<pi>' @ a # \<pi>)" by (auto simp add: get_pc_def)
+    then obtain s \<pi>' where P: "pc = the (?\<rho> s) + converted_length \<pi>' \<and> 
+      lookup \<Pi> s = Some (\<pi>' @ a # \<pi>)" by (auto simp add: get_pc_def)
 
 
-    have "concat (map (instruction_conv ?\<rho>) (get_assembly \<Pi>)) ! (the (?\<rho> s) + converted_length \<pi>' + i) = 
-      instruction_conv ?\<rho> a ! i" by simp
+    have "concat (map (instruction_conv ?\<rho>) (get_assembly \<Pi>)) ! 
+      (the (?\<rho> s) + converted_length \<pi>' + i) = instruction_conv ?\<rho> a ! i" by simp
     with P show ?thesis by (simp add: program_convert_def)
   qed
-
-lemma [simp]: "converted_length (\<pi> @ \<pi>') = converted_length \<pi> + converted_length \<pi>'"
-  by (induction \<pi> rule: converted_length.induct) simp_all
 
 lemma [simp]: "pc \<in> get_pc \<Pi> (AAssm x # \<pi>) \<Longrightarrow> Suc pc \<in> get_pc \<Pi> \<pi>"
   proof -
@@ -174,7 +184,8 @@ lemma eval_assembly_conv [simp]: "eval_assembly \<Pi> \<Sigma> = Some \<Sigma>\<
           case (Some \<pi>')
             with 5 True have S: "\<Sigma>\<^sub>1 = (\<sigma>, None, d, \<pi>')" by simp
             from Some have X: "(\<sigma>, ?s, d, nat ?s) \<in> state_convert \<Pi> (\<sigma>, None, d, \<pi>')" by simp
-            from P lookup_convert True have "eval_machine (program_convert \<Pi>) (\<sigma>, ?s, d, Suc pc) = 
+            have "1 < machine_length (JAssm jmp s)" by simp
+            with P lookup_convert True have "eval_machine (program_convert \<Pi>) (\<sigma>, ?s, d, Suc pc) = 
               Some (\<sigma>, ?s, d, nat ?s)" by fastforce
             with first_step X P S show ?thesis by fast
           next case None
@@ -183,9 +194,10 @@ lemma eval_assembly_conv [simp]: "eval_assembly \<Pi> \<Sigma> = Some \<Sigma>\<
       next case False
         from 5 False have S: "\<Sigma>\<^sub>1 = (\<sigma>, None, d, \<pi>)" by auto
         from P have X: "(\<sigma>, ?s, d, Suc (Suc pc)) \<in> state_convert \<Pi> (\<sigma>, None, d, \<pi>)" by auto
-        from False have "eval_instruction (CInstr {} (Reg D) jmp) (\<sigma>, ?s, d, Suc pc) = 
+        from False have Y: "eval_instruction (CInstr {} (Reg D) jmp) (\<sigma>, ?s, d, Suc pc) = 
           (\<sigma>, ?s, d, Suc (Suc pc))" by auto
-        with P lookup_convert have "eval_machine (program_convert \<Pi>) (\<sigma>, ?s, d, Suc pc) =
+        have "1 < machine_length (JAssm jmp s)" by simp
+        with P Y lookup_convert have "eval_machine (program_convert \<Pi>) (\<sigma>, ?s, d, Suc pc) =
           Some (\<sigma>, ?s, d, Suc (Suc pc))" by fastforce
         with first_step X P S show ?thesis by fast
       qed
