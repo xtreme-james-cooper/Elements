@@ -47,7 +47,7 @@ lemma [simp]: "lookup \<Pi> s = Some \<pi> \<Longrightarrow> \<exists>n. build_s
 lemma [simp]: "lookup \<Pi> s = Some \<pi> \<Longrightarrow> nat (get_block_addr (build_symbol_table \<Pi>) s) \<in> get_pc \<Pi> \<pi>" 
   by (induction \<Pi> s rule: lookup.induct) (auto simp add: get_block_addr_def get_pc_def)
 
-lemma [simp]: "length (instruction_conv \<rho> a) = machine_length a"
+lemma instr_conv_len [simp]: "length (instruction_conv \<rho> a) = machine_length a"
   by (induction a) simp_all
 
 lemma convert_expands [simp]: "length \<pi> \<le> converted_length \<pi>"
@@ -97,19 +97,64 @@ lemma [simp]: "pc \<in> get_pc \<Pi> (a # \<pi>) \<Longrightarrow> pc < length (
 lemma [simp]: "pc \<in> get_pc \<Pi> (JAssm jmp s # \<pi>) \<Longrightarrow> Suc pc < length (program_convert \<Pi>)"
   using pc_within by fastforce
 
+lemma [simp]: "i < machine_length a \<Longrightarrow> (instruction_conv \<rho> a @ \<pi>) ! i = instruction_conv \<rho> a ! i"
+  by (induction a) (simp_all, induction i, simp_all)
+
+lemma lookup_convert': "i < machine_length a \<Longrightarrow> 
+  concat (map (instruction_conv \<rho>) (\<pi> @ a # \<pi>')) ! (converted_length \<pi> + i) = 
+    instruction_conv \<rho> a ! i"
+  proof (induction \<pi>)
+  case Nil
+    thus ?case by simp
+  next case (Cons a' \<pi>)
+    hence "(instruction_conv \<rho> a' @ concat (map (instruction_conv \<rho>) (\<pi> @ a # \<pi>'))) ! 
+        (length (instruction_conv \<rho> a') + converted_length \<pi> + i) = instruction_conv \<rho> a ! i" 
+      by (simp add: add.assoc del: instr_conv_len)
+    thus ?case by simp
+  qed
+
+lemma [simp]: "lookup \<Pi> s = Some \<pi> \<Longrightarrow> i < converted_length \<pi> \<Longrightarrow> 
+  program_convert \<Pi> ! (the (build_symbol_table \<Pi> s) + i) = 
+    concat (map (instruction_conv (build_symbol_table \<Pi>)) \<pi>) ! i"
+  proof (induction \<Pi> s rule: build_symbol_table.induct)
+  case 1
+    thus ?case by simp
+  next case (2 s' \<pi>' \<Pi> s)
+    let ?\<rho> = "build_symbol_table ((s', \<pi>') # \<Pi>)"
+    show ?case
+      proof (cases "s' = s")
+      case True
+        with 2 have "program_convert ((s', \<pi>') # \<Pi>) ! (the (?\<rho> s) + i) = 
+            concat (map (instruction_conv ?\<rho>) \<pi>) ! i" 
+          by (simp add: program_convert_def get_assembly_def nth_append)
+        thus ?thesis by fastforce      
+      next case False
+        with 2 obtain j where P: "build_symbol_table \<Pi> s = Some j" by fastforce
+
+        from 2 False P have "program_convert \<Pi> ! (j + i) = concat (map (instruction_conv (build_symbol_table \<Pi>)) \<pi>) ! i" by simp
+        from 2 False have "lookup \<Pi> s = Some \<pi>" by simp
+        from 2 have "i < converted_length \<pi>" by simp
+    
+
+    
+        from False have "
+          (concat (map (instruction_conv ?\<rho>) (concat (map snd \<Pi>)))) ! (j + i) = 
+           concat (map (instruction_conv ?\<rho>) \<pi>) ! i" by simp
+        with False P have "program_convert ((s', \<pi>') # \<Pi>) ! (the (?\<rho> s) + i) = 
+            concat (map (instruction_conv ?\<rho>) \<pi>) ! i" 
+          by (simp add: program_convert_def get_assembly_def nth_append)
+        thus ?thesis by fastforce
+      qed
+  qed
+
 lemma lookup_convert: "pc \<in> get_pc \<Pi> (a # \<pi>) \<Longrightarrow> i < machine_length a \<Longrightarrow>
     program_convert \<Pi> ! (pc + i) = instruction_conv (build_symbol_table \<Pi>) a ! i"
   proof -
-    let ?\<rho> = "build_symbol_table \<Pi>"
-    assume "i < machine_length a"
+    assume L: "i < machine_length a"
     assume "pc \<in> get_pc \<Pi> (a # \<pi>)" 
-    then obtain s \<pi>' where P: "pc = the (?\<rho> s) + converted_length \<pi>' \<and> 
+    then obtain s \<pi>' where P: "pc = the (build_symbol_table \<Pi> s) + converted_length \<pi>' \<and> 
       lookup \<Pi> s = Some (\<pi>' @ a # \<pi>)" by (auto simp add: get_pc_def)
-
-
-    have "concat (map (instruction_conv ?\<rho>) (get_assembly \<Pi>)) ! 
-      (the (?\<rho> s) + converted_length \<pi>' + i) = instruction_conv ?\<rho> a ! i" by simp
-    with P show ?thesis by (simp add: program_convert_def)
+    from L lookup_convert' P show ?thesis by (simp add: add.assoc)
   qed
 
 lemma [simp]: "pc \<in> get_pc \<Pi> (AAssm x # \<pi>) \<Longrightarrow> Suc pc \<in> get_pc \<Pi> \<pi>"
