@@ -1,4 +1,4 @@
-theory Assembler
+theory AssemblyToMachine
 imports AssemblyLanguage MachineLanguage Iterate
 begin
 

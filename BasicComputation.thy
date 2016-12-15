@@ -15,6 +15,12 @@ datatype computation =
 fun should_jump :: "int \<Rightarrow> comparison set \<Rightarrow> bool" where
   "should_jump n jmp = ((LT \<in> jmp \<and> n < 0) \<or> (EQ \<in> jmp \<and> n = 0) \<or> (GT \<in> jmp \<and> n > 0 ))"
 
+definition boolify :: "int \<Rightarrow> bool" where
+  "boolify i = (i = 0)"
+
+definition unboolify :: "bool \<Rightarrow> int" where
+  "unboolify b = (if b then 1 else 0)"
+
 fun compute :: "computation \<Rightarrow> int \<Rightarrow> int \<Rightarrow> int \<Rightarrow> int" where
   "compute Zero m a d = 0"
 | "compute One m a d = 1"
@@ -22,9 +28,9 @@ fun compute :: "computation \<Rightarrow> int \<Rightarrow> int \<Rightarrow> in
 | "compute (Reg M) m a d = m"
 | "compute (Reg A) m a d = a"
 | "compute (Reg D) m a d = d"
-| "compute (Not M) m a d = (if m = 0 then 1 else 0)"
-| "compute (Not A) m a d = (if a = 0 then 1 else 0)"
-| "compute (Not D) m a d = (if d = 0 then 1 else 0)"
+| "compute (Not M) m a d = unboolify (\<not> boolify m)"
+| "compute (Not A) m a d = unboolify (\<not> boolify a)"
+| "compute (Not D) m a d = unboolify (\<not> boolify d)"
 | "compute (Neg M) m a d = -m"
 | "compute (Neg A) m a d = -a"
 | "compute (Neg D) m a d = -d"
@@ -40,9 +46,9 @@ fun compute :: "computation \<Rightarrow> int \<Rightarrow> int \<Rightarrow> in
 | "compute DMinusM m a d = d - m"
 | "compute AMinusD m a d = a - d"
 | "compute MMinusD m a d = m - d"
-| "compute DAndA m a d = (if d \<noteq> 0 \<and> a \<noteq> 0 then 1 else 0)"
-| "compute DAndM m a d = (if d \<noteq> 0 \<and> m \<noteq> 0 then 1 else 0)"
-| "compute DOrA m a d = (if d \<noteq> 0 \<or> a \<noteq> 0 then 1 else 0)"
-| "compute DOrM m a d = (if d \<noteq> 0 \<or> m \<noteq> 0 then 1 else 0)"
+| "compute DAndA m a d = unboolify (boolify d \<and> boolify a)"
+| "compute DAndM m a d = unboolify (boolify d \<and> boolify m)"
+| "compute DOrA m a d = unboolify (boolify d \<or> boolify a)"
+| "compute DOrM m a d = unboolify (boolify d \<or> boolify m)"
 
 end
