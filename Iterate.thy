@@ -10,7 +10,7 @@ lemma [elim]: "f x = Some y \<Longrightarrow> iterate f x y"
   proof -
     assume "f x = Some y"
     moreover have "iterate f x x" by simp
-    ultimately show "iterate f x y" by (metis iter_step)
+    ultimately show ?thesis by (metis iter_step)
   qed
 
 lemma [elim]: "f x = Some y \<Longrightarrow> f y = Some z \<Longrightarrow> iterate f x z"
@@ -18,7 +18,7 @@ lemma [elim]: "f x = Some y \<Longrightarrow> f y = Some z \<Longrightarrow> ite
     assume "f x = Some y"
     moreover assume "f y = Some z"
     moreover have "iterate f x x" by simp
-    ultimately show "iterate f x z" by (metis iter_step)
+    ultimately show ?thesis by (metis iter_step)
   qed
 
 lemma [elim]: "iterate f y z \<Longrightarrow> f x = Some y \<Longrightarrow> iterate f x z"
