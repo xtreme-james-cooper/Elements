@@ -113,48 +113,79 @@ lemma lookup_convert': "i < machine_length a \<Longrightarrow>
     thus ?case by simp
   qed
 
-lemma [simp]: "lookup \<Pi> s = Some \<pi> \<Longrightarrow> i < converted_length \<pi> \<Longrightarrow> 
-  program_convert \<Pi> ! (the (build_symbol_table \<Pi> s) + i) = 
-    concat (map (instruction_conv (build_symbol_table \<Pi>)) \<pi>) ! i"
-  proof (induction \<Pi> s rule: build_symbol_table.induct)
+lemma symtab_conversion: "domain_distinct ((s', \<pi>) # \<Pi>) \<Longrightarrow> \<forall>s \<in> insert s' (dom (lookup \<Pi>)). 
+  \<rho> s = map_option (op + n) (build_symbol_table ((s', \<pi>) # \<Pi>) s) \<Longrightarrow> 
+    \<forall>s \<in> dom (lookup \<Pi>). \<rho> s = map_option (op + (n + converted_length \<pi>)) (build_symbol_table \<Pi> s)"
+  proof 
+    fix s
+    assume "domain_distinct ((s', \<pi>) # \<Pi>)"
+    moreover assume "s \<in> dom (lookup \<Pi>)"
+    moreover then obtain m where "build_symbol_table \<Pi> s = Some m" by fastforce
+    moreover assume "\<forall>x \<in> insert s' (dom (lookup \<Pi>)). 
+      \<rho> x = map_option (op + n) (build_symbol_table ((s', \<pi>) # \<Pi>) x)"
+    ultimately show "\<rho> s = map_option (op + (n + converted_length \<pi>)) (build_symbol_table \<Pi> s)"
+      by auto
+  qed
+
+lemma lookup_convert'': "domain_distinct \<Pi> \<Longrightarrow> lookup \<Pi> s = Some \<pi> \<Longrightarrow> i < converted_length \<pi> \<Longrightarrow> 
+  \<forall>x \<in> dom (lookup \<Pi>). \<rho> x = map_option (op + n) (build_symbol_table \<Pi> x) \<Longrightarrow>
+    concat (map (instruction_conv \<rho>) (get_assembly \<Pi>)) ! (the (\<rho> s) - n + i) = 
+      concat (map (instruction_conv \<rho>) \<pi>) ! i"
+  proof (induction \<Pi> s arbitrary: n rule: lookup.induct)
   case 1
     thus ?case by simp
   next case (2 s' \<pi>' \<Pi> s)
-    let ?\<rho> = "build_symbol_table ((s', \<pi>') # \<Pi>)"
-    show ?case
+    thus ?case
       proof (cases "s' = s")
       case True
-        with 2 have "program_convert ((s', \<pi>') # \<Pi>) ! (the (?\<rho> s) + i) = 
-            concat (map (instruction_conv ?\<rho>) \<pi>) ! i" 
-          by (simp add: program_convert_def get_assembly_def nth_append)
-        thus ?thesis by fastforce      
+        with 2 have "\<rho> s = Some n" by force                      
+        with 2 True show ?thesis by (simp add: get_assembly_def nth_append)
       next case False
-        with 2 obtain j where P: "build_symbol_table \<Pi> s = Some j" by fastforce
-
-        from 2 False P have "program_convert \<Pi> ! (j + i) = concat (map (instruction_conv (build_symbol_table \<Pi>)) \<pi>) ! i" by simp
-        from 2 False have "lookup \<Pi> s = Some \<pi>" by simp
-        from 2 have "i < converted_length \<pi>" by simp
-    
-
-    
-        from False have "
-          (concat (map (instruction_conv ?\<rho>) (concat (map snd \<Pi>)))) ! (j + i) = 
-           concat (map (instruction_conv ?\<rho>) \<pi>) ! i" by simp
-        with False P have "program_convert ((s', \<pi>') # \<Pi>) ! (the (?\<rho> s) + i) = 
-            concat (map (instruction_conv ?\<rho>) \<pi>) ! i" 
-          by (simp add: program_convert_def get_assembly_def nth_append)
-        thus ?thesis by fastforce
+        let ?xs = "concat (map (instruction_conv \<rho>) \<pi>')"
+        let ?ys = "concat (map (instruction_conv \<rho>) (get_assembly \<Pi>))"
+        let ?n = "the (\<rho> s) - n + i"
+        from False 2 obtain m where M: "build_symbol_table \<Pi> s = Some m" by fastforce
+        from 2 have "\<forall>x\<in>dom (lookup ((s', \<pi>') # \<Pi>)). 
+          \<rho> x = map_option (op + n) (build_symbol_table ((s', \<pi>') # \<Pi>) x)" by blast
+        hence "\<forall>x\<in>insert s' (dom (lookup \<Pi>)). 
+          \<rho> x = map_option (op + n) (build_symbol_table ((s', \<pi>') # \<Pi>) x)" by fastforce
+        with 2 symtab_conversion have H: "\<forall>x \<in> dom (lookup \<Pi>). 
+          \<rho> x = map_option (op + (n + converted_length \<pi>')) (build_symbol_table \<Pi> x)" by blast
+        with 2 False M have "\<rho> s = Some (n + converted_length \<pi>' + m)" by force
+        hence "(if ?n < converted_length \<pi>' then ?xs ! ?n else ?ys ! (?n - converted_length \<pi>')) = 
+          ?ys ! (the (\<rho> s) - n - converted_length \<pi>' + i)" by simp
+        with 2 False H show ?thesis by (auto simp add: get_assembly_def nth_append)
       qed
   qed
 
-lemma lookup_convert: "pc \<in> get_pc \<Pi> (a # \<pi>) \<Longrightarrow> i < machine_length a \<Longrightarrow>
+lemma [simp]: "domain_distinct \<Pi> \<Longrightarrow> lookup \<Pi> s = Some \<pi> \<Longrightarrow> i < converted_length \<pi> \<Longrightarrow> 
+  program_convert \<Pi> ! (the (build_symbol_table \<Pi> s) + i) = 
+    concat (map (instruction_conv (build_symbol_table \<Pi>)) \<pi>) ! i"
+  proof -
+    assume D: "domain_distinct \<Pi>"
+       and L: "lookup \<Pi> s = Some \<pi>"
+       and I: "i < converted_length \<pi>"
+    have "\<forall>x. build_symbol_table \<Pi> x = map_option (op + 0) (build_symbol_table \<Pi> x)"
+      proof
+        fix x
+        show "build_symbol_table \<Pi> x = map_option (op + 0) (build_symbol_table \<Pi> x)" 
+          by (cases "build_symbol_table \<Pi> x") simp_all
+      qed
+    with D L I have "program_convert \<Pi> ! (the (build_symbol_table \<Pi> s) - 0 + i) = 
+        concat (map (instruction_conv (build_symbol_table \<Pi>)) \<pi>) ! i" 
+      by (metis lookup_convert'' program_convert_def)
+    thus ?thesis by simp
+  qed
+
+lemma lookup_convert: "domain_distinct \<Pi> \<Longrightarrow> pc \<in> get_pc \<Pi> (a # \<pi>) \<Longrightarrow> i < machine_length a \<Longrightarrow>
     program_convert \<Pi> ! (pc + i) = instruction_conv (build_symbol_table \<Pi>) a ! i"
   proof -
+    assume D: "domain_distinct \<Pi>"
     assume L: "i < machine_length a"
     assume "pc \<in> get_pc \<Pi> (a # \<pi>)" 
     then obtain s \<pi>' where P: "pc = the (build_symbol_table \<Pi> s) + converted_length \<pi>' \<and> 
       lookup \<Pi> s = Some (\<pi>' @ a # \<pi>)" by (auto simp add: get_pc_def)
-    from L lookup_convert' P show ?thesis by (simp add: add.assoc)
+    from D L lookup_convert' P show ?thesis by (simp add: add.assoc)
   qed
 
 lemma [simp]: "pc \<in> get_pc \<Pi> (AAssm x # \<pi>) \<Longrightarrow> Suc pc \<in> get_pc \<Pi> \<pi>"
@@ -189,7 +220,8 @@ lemma [simp]: "pc \<in> get_pc \<Pi> (JAssm jmp s # \<pi>) \<Longrightarrow> Suc
 lemma [simp]: "\<Sigma> \<in> state_convert \<Pi> (\<sigma>, a, d, \<pi>) \<Longrightarrow> \<exists>aa pc. \<Sigma> = (\<sigma>, aa, d, pc) \<and> pc \<in> get_pc \<Pi> \<pi>"
   by (cases a) auto
 
-lemma eval_assembly_conv [simp]: "eval_assembly \<Pi> \<Sigma> = Some \<Sigma>\<^sub>1 \<Longrightarrow> \<Sigma>' \<in> state_convert \<Pi> \<Sigma> \<Longrightarrow>
+lemma eval_assembly_conv [simp]: "domain_distinct \<Pi> \<Longrightarrow> eval_assembly \<Pi> \<Sigma> = Some \<Sigma>\<^sub>1 \<Longrightarrow> 
+  \<Sigma>' \<in> state_convert \<Pi> \<Sigma> \<Longrightarrow>
     \<exists>\<Sigma>\<^sub>1'. \<Sigma>\<^sub>1' \<in> state_convert \<Pi> \<Sigma>\<^sub>1 \<and> iterate (eval_machine (program_convert \<Pi>)) \<Sigma>' \<Sigma>\<^sub>1'"
   proof (induction \<Pi> \<Sigma> rule: eval_assembly.induct)
   case 1
@@ -198,7 +230,7 @@ lemma eval_assembly_conv [simp]: "eval_assembly \<Pi> \<Sigma> = Some \<Sigma>\<
     from 2 have S: "\<Sigma>\<^sub>1 = (\<sigma>, Some x, d, \<pi>)" by simp
     from 2 obtain pc aa where P: "\<Sigma>' = (\<sigma>, aa, d, pc) \<and> pc \<in> get_pc \<Pi> (AAssm x # \<pi>)" by fastforce
     hence X: "(\<sigma>, x, d, Suc pc) \<in> state_convert \<Pi> (\<sigma>, Some x, d, \<pi>)" by auto
-    from P lookup_convert have "eval_machine (program_convert \<Pi>) (\<sigma>, aa, d, pc) = 
+    from 2 P lookup_convert have "eval_machine (program_convert \<Pi>) (\<sigma>, aa, d, pc) = 
       Some (\<sigma>, x, d, Suc pc)" by fastforce
     with X S P show ?case by fast
   next case (3 \<Pi> \<sigma> a d dst cmp \<pi>)
@@ -211,7 +243,7 @@ lemma eval_assembly_conv [simp]: "eval_assembly \<Pi> \<Sigma> = Some \<Sigma>\<
     hence X: "(?\<sigma>, ?a, ?d, Suc pc) \<in> state_convert \<Pi> (?\<sigma>, Some ?a, ?d, \<pi>)" by auto
     have "eval_instruction (CInstr dst cmp {}) (\<sigma>, a, d, pc) = (?\<sigma>, ?a, ?d, Suc pc)" 
       by (simp add: Let_def)
-    with P lookup_convert have "eval_machine (program_convert \<Pi>) (\<sigma>, a, d, pc) = 
+    with 3 P lookup_convert have "eval_machine (program_convert \<Pi>) (\<sigma>, a, d, pc) = 
       Some (?\<sigma>, ?a, ?d, Suc pc)" by fastforce
     with X S P show ?case by fast
   next case 4
@@ -219,7 +251,7 @@ lemma eval_assembly_conv [simp]: "eval_assembly \<Pi> \<Sigma> = Some \<Sigma>\<
   next case (5 \<Pi> \<sigma> a d jmp s \<pi>)
     then obtain pc aa where P: "\<Sigma>' = (\<sigma>, aa, d, pc) \<and> pc \<in> get_pc \<Pi> (JAssm jmp s # \<pi>)" by fastforce
     let ?s = "get_block_addr (build_symbol_table \<Pi>) s"
-    from P lookup_convert have first_step: "eval_machine (program_convert \<Pi>) (\<sigma>, aa, d, pc) = 
+    from 5 P lookup_convert have first_step: "eval_machine (program_convert \<Pi>) (\<sigma>, aa, d, pc) = 
       Some (\<sigma>, ?s, d, Suc pc)" by fastforce
     show ?case
       proof (cases "should_jump d jmp")
@@ -230,7 +262,7 @@ lemma eval_assembly_conv [simp]: "eval_assembly \<Pi> \<Sigma> = Some \<Sigma>\<
             with 5 True have S: "\<Sigma>\<^sub>1 = (\<sigma>, None, d, \<pi>')" by simp
             from Some have X: "(\<sigma>, ?s, d, nat ?s) \<in> state_convert \<Pi> (\<sigma>, None, d, \<pi>')" by simp
             have "1 < machine_length (JAssm jmp s)" by simp
-            with P lookup_convert True have "eval_machine (program_convert \<Pi>) (\<sigma>, ?s, d, Suc pc) = 
+            with 5 P lookup_convert True have "eval_machine (program_convert \<Pi>) (\<sigma>, ?s, d, Suc pc) = 
               Some (\<sigma>, ?s, d, nat ?s)" by fastforce
             with first_step X P S show ?thesis by fast
           next case None
@@ -242,13 +274,14 @@ lemma eval_assembly_conv [simp]: "eval_assembly \<Pi> \<Sigma> = Some \<Sigma>\<
         from False have Y: "eval_instruction (CInstr {} (Reg D) jmp) (\<sigma>, ?s, d, Suc pc) = 
           (\<sigma>, ?s, d, Suc (Suc pc))" by auto
         have "1 < machine_length (JAssm jmp s)" by simp
-        with P Y lookup_convert have "eval_machine (program_convert \<Pi>) (\<sigma>, ?s, d, Suc pc) =
+        with 5 P Y lookup_convert have "eval_machine (program_convert \<Pi>) (\<sigma>, ?s, d, Suc pc) =
           Some (\<sigma>, ?s, d, Suc (Suc pc))" by fastforce
         with first_step X P S show ?thesis by fast
       qed
   qed
 
 theorem [simp]: "iterate (eval_assembly \<Pi>) \<Sigma> \<Sigma>\<^sub>1 \<Longrightarrow> \<Sigma>' \<in> state_convert \<Pi> \<Sigma> \<Longrightarrow> 
+  domain_distinct \<Pi> \<Longrightarrow> 
     \<exists>\<Sigma>\<^sub>1'. \<Sigma>\<^sub>1' \<in> state_convert \<Pi> \<Sigma>\<^sub>1 \<and> iterate (eval_machine (program_convert \<Pi>)) \<Sigma>' \<Sigma>\<^sub>1'"
   proof (induction "eval_assembly \<Pi>" \<Sigma> \<Sigma>\<^sub>1 arbitrary: \<Sigma>' rule: iterate.induct)
   case iter_refl
