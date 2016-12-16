@@ -1,15 +1,8 @@
 theory LinearAssemblyLanguage
-imports FiniteMap BasicComputation
+imports AssemblyLanguage FiniteMap Iterate
 begin
 
-datatype assembly =
-  AAssm int
-| CAssm "register set" computation
-| JAssm "comparison set" code_label
-
 type_synonym linear_assembly_program = "code_label \<leadsto> assembly list"
-
-type_synonym assembly_state = "memory \<times> int option \<times> int \<times> assembly list" (* \<mu>, a, d, pc *)
 
 fun eval_linear_assembly :: "linear_assembly_program \<Rightarrow> assembly_state \<Rightarrow> assembly_state option" where
   "eval_linear_assembly \<Pi> (\<mu>, a, d, []) = None"
@@ -28,5 +21,26 @@ fun eval_linear_assembly :: "linear_assembly_program \<Rightarrow> assembly_stat
         Some \<pi>' \<Rightarrow> Some (\<mu>, None, d, \<pi>')
       | None \<Rightarrow> None
     else Some (\<mu>, None, d, \<pi>))"
+
+(* linearization correct *)
+
+lemma [simp]: "finite (dom \<Pi>) \<Longrightarrow> eval_assembly \<Pi> \<Sigma> = Some \<Sigma>' \<Longrightarrow> 
+    eval_linear_assembly (linearize \<Pi>) \<Sigma> = Some \<Sigma>'"
+  proof (induction \<Pi> \<Sigma> rule: eval_assembly.induct)
+  case 1
+    from 1(2) show ?case by simp
+  next case 2
+    thus ?case by simp
+  next case 3
+    thus ?case by simp
+  next case 4
+    from 4(2) show ?case by simp
+  next case 5
+    thus ?case by auto
+  qed 
+
+theorem linearization_correct [simp]: "iterate (eval_assembly \<Pi>) \<Sigma> \<Sigma>' \<Longrightarrow> finite (dom \<Pi>) \<Longrightarrow> 
+    iterate (eval_linear_assembly (linearize \<Pi>)) \<Sigma> \<Sigma>'"
+  by (induction "eval_assembly \<Pi>" \<Sigma> \<Sigma>' rule: iterate.induct) simp_all
 
 end

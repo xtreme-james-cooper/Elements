@@ -1,11 +1,11 @@
 theory StackLanguage
-imports BasicComputation FiniteMap
+imports BasicComputation
 begin
 
 datatype stack_instruction = 
   Add | Sub | Neg | Eq | Gt | Lt | And | Or | Not
 
-type_synonym stack_program = "code_label \<leadsto> stack_instruction list"
+type_synonym stack_program = "code_label \<rightharpoonup> stack_instruction list"
 
 type_synonym stack_state = "int list \<times> stack_instruction list" (* \<sigma>, \<pi> *)
 

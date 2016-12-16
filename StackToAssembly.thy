@@ -1,5 +1,5 @@
 theory StackToAssembly
-imports StackLanguage LinearAssemblyLanguage Iterate
+imports StackLanguage AssemblyLanguage Iterate
 begin
 
 primrec instruction_conv :: "stack_instruction \<Rightarrow> assembly list" where
@@ -13,9 +13,8 @@ primrec instruction_conv :: "stack_instruction \<Rightarrow> assembly list" wher
 | "instruction_conv Or = [AAssm 0, CAssm {A} (Reg M), CAssm {D} (Reg M), AAssm 0, CAssm {A, M} (Decr M), CAssm {M} DOrM]"
 | "instruction_conv Not = [AAssm 0, CAssm {A} (Reg M), CAssm {D} (NotR M)]"
 
-fun program_convert :: "stack_program \<Rightarrow> linear_assembly_program" where
-  "program_convert [] = []"
- |"program_convert ((s, \<pi>) # \<Pi>) = (s, concat (map instruction_conv \<pi>)) # program_convert \<Pi>"
+definition program_convert :: "stack_program \<Rightarrow> assembly_program" where
+  "program_convert \<Pi> = map_option concat o map_option (map instruction_conv) o \<Pi>"
 
 primrec stack_to_mem :: "int list \<Rightarrow> (int \<Rightarrow> int) \<Rightarrow> int \<Rightarrow> int" where
   "stack_to_mem [] \<mu> k = \<mu> k"
@@ -26,20 +25,8 @@ primrec state_convert :: "stack_state \<Rightarrow> assembly_state set" where
 
 (* conversion correctness *)
 
-lemma [simp]: "dom (lookup (program_convert \<Pi>)) = dom (lookup \<Pi>)"
-  proof (induction \<Pi> rule: domain_distinct.induct)
-  case 1 
-    thus ?case by simp
-  next case (2 s \<pi> \<Pi>)
-    hence "dom (lookup (program_convert \<Pi>)) = dom (lookup \<Pi>)" by simp
-
-
-    have "dom (lookup (program_convert ((s, \<pi>) # \<Pi>))) = dom (lookup ((s, \<pi>) # \<Pi>))" by simp
-    thus ?case by blast
-  qed
-
-lemma [simp]: "domain_distinct \<Pi> \<Longrightarrow> domain_distinct (program_convert \<Pi>)"
-  by (induction \<Pi> rule: domain_distinct.induct) simp_all
+lemma [simp]: "dom (program_convert \<Pi>) = dom \<Pi>"
+  by (auto simp add: program_convert_def)
 
 lemma eval_stack_conv [simp]: "eval_stack \<Pi> \<Sigma>\<^sub>S = Some \<Sigma>\<^sub>S' \<Longrightarrow> \<Sigma>\<^sub>A \<in> state_convert \<Sigma>\<^sub>S \<Longrightarrow> 
     \<exists>\<Sigma>\<^sub>A'. \<Sigma>\<^sub>A' \<in> state_convert \<Sigma>\<^sub>S' \<and> iterate (eval_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A \<Sigma>\<^sub>A'"
@@ -115,18 +102,18 @@ lemma eval_stack_conv [simp]: "eval_stack \<Pi> \<Sigma>\<^sub>S = Some \<Sigma>
 
 theorem stack_to_assembly_correct [simp]: "iterate (eval_stack \<Pi>) \<Sigma>\<^sub>S \<Sigma>\<^sub>S' \<Longrightarrow> 
   \<Sigma>\<^sub>A \<in> state_convert \<Sigma>\<^sub>S \<Longrightarrow> 
-    \<exists>\<Sigma>\<^sub>A'. \<Sigma>\<^sub>A' \<in> state_convert \<Sigma>\<^sub>S' \<and> iterate (eval_linear_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A \<Sigma>\<^sub>A'"
+    \<exists>\<Sigma>\<^sub>A'. \<Sigma>\<^sub>A' \<in> state_convert \<Sigma>\<^sub>S' \<and> iterate (eval_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A \<Sigma>\<^sub>A'"
   proof (induction "eval_stack \<Pi>" \<Sigma>\<^sub>S \<Sigma>\<^sub>S' arbitrary: \<Sigma>\<^sub>A rule: iterate.induct)
   case iter_refl
     thus ?case by fastforce
   next case (iter_step \<Sigma>\<^sub>S \<Sigma>\<^sub>S' \<Sigma>\<^sub>S'')
     then obtain \<Sigma>\<^sub>A' where S: "\<Sigma>\<^sub>A' \<in> state_convert \<Sigma>\<^sub>S' \<and> 
-      iterate (eval_linear_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A \<Sigma>\<^sub>A'" by blast
+      iterate (eval_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A \<Sigma>\<^sub>A'" by blast
     with iter_step eval_stack_conv obtain \<Sigma>\<^sub>A'' where
-        "\<Sigma>\<^sub>A'' \<in> state_convert \<Sigma>\<^sub>S'' \<and> iterate (eval_linear_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A' \<Sigma>\<^sub>A''" 
+        "\<Sigma>\<^sub>A'' \<in> state_convert \<Sigma>\<^sub>S'' \<and> iterate (eval_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A' \<Sigma>\<^sub>A''" 
       by blast
     with S have "\<Sigma>\<^sub>A'' \<in> state_convert \<Sigma>\<^sub>S'' \<and> 
-      iterate (eval_linear_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A \<Sigma>\<^sub>A''" by fastforce
+      iterate (eval_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A \<Sigma>\<^sub>A''" by fastforce
     thus ?case by blast
   qed
 
