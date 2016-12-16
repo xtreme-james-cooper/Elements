@@ -18,8 +18,9 @@ theorem total_correctness: "finite (dom \<Pi>) \<Longrightarrow> iterate (eval_s
     \<exists>\<Sigma>\<^sub>M'. \<Sigma>\<^sub>M' \<in> state_convert \<Pi> \<Sigma>\<^sub>S' \<and> iterate (eval_machine (program_convert \<Pi>)) \<Sigma>\<^sub>M \<Sigma>\<^sub>M'"
   proof -
     assume D: "finite (dom \<Pi>)"
+    hence DA: "finite (dom (StackToAssembly.program_convert \<Pi>))" by simp
+    hence DF: "finite (dom (debranch (StackToAssembly.program_convert \<Pi>)))" by simp
     hence DL: "domain_distinct (linearize (debranch (StackToAssembly.program_convert \<Pi>)))" by simp
-    from D have DF: "finite (dom (debranch (StackToAssembly.program_convert \<Pi>)))" by simp
     assume ES: "iterate (eval_stack \<Pi>) \<Sigma>\<^sub>S \<Sigma>\<^sub>S'"
     assume "\<Sigma>\<^sub>M \<in> state_convert \<Pi> \<Sigma>\<^sub>S"
     with state_convert_def obtain \<Sigma>\<^sub>B where SA: "\<Sigma>\<^sub>B \<in> StackToAssembly.state_convert \<Sigma>\<^sub>S \<and> 
@@ -32,7 +33,7 @@ theorem total_correctness: "finite (dom \<Pi>) \<Longrightarrow> iterate (eval_s
         iterate (eval_b_assembly (StackToAssembly.program_convert \<Pi>)) \<Sigma>\<^sub>B \<Sigma>\<^sub>B'" by blast
     let ?\<Sigma>\<^sub>A = "Debranching.state_convert (dom (StackToAssembly.program_convert \<Pi>)) \<Sigma>\<^sub>B"
     let ?\<Sigma>\<^sub>A' = "Debranching.state_convert (dom (StackToAssembly.program_convert \<Pi>)) \<Sigma>\<^sub>B'"
-    from SA' ES debranching_correct have 
+    from SA' ES DA debranching_correct have 
       "iterate (eval_assembly (debranch (StackToAssembly.program_convert \<Pi>))) ?\<Sigma>\<^sub>A ?\<Sigma>\<^sub>A'" by blast
     with DF linearization_correct have 
       "iterate (eval_l_assembly (linearize (debranch (StackToAssembly.program_convert \<Pi>)))) 
