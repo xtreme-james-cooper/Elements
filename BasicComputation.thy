@@ -2,7 +2,7 @@ theory BasicComputation
 imports Main
 begin
 
-typedecl symbol
+typedecl code_label
 
 type_synonym memory = "int \<Rightarrow> int"
 

@@ -22,7 +22,7 @@ theorem total_correctness: "iterate (eval_stack \<Pi>) \<Sigma>\<^sub>S \<Sigma>
       \<Sigma>\<^sub>M \<in> AssemblyToMachine.state_convert (StackToAssembly.program_convert \<Pi>) \<Sigma>\<^sub>A" by blast
     with ES stack_to_assembly_correct obtain \<Sigma>\<^sub>A' where SA': 
       "\<Sigma>\<^sub>A' \<in> StackToAssembly.state_convert \<Sigma>\<^sub>S' \<and> 
-        iterate (eval_assembly (StackToAssembly.program_convert \<Pi>)) \<Sigma>\<^sub>A \<Sigma>\<^sub>A'" by blast
+        iterate (eval_linear_assembly (StackToAssembly.program_convert \<Pi>)) \<Sigma>\<^sub>A \<Sigma>\<^sub>A'" by blast
     with SA D assembly_to_machine_correct obtain \<Sigma>\<^sub>M' where SM': 
       "\<Sigma>\<^sub>M' \<in> AssemblyToMachine.state_convert (StackToAssembly.program_convert \<Pi>) \<Sigma>\<^sub>A' \<and> 
         iterate (eval_machine 

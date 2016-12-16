@@ -1,5 +1,5 @@
 theory StackToAssembly
-imports StackLanguage AssemblyLanguage Iterate
+imports StackLanguage LinearAssemblyLanguage Iterate
 begin
 
 primrec instruction_conv :: "stack_instruction \<Rightarrow> assembly list" where
@@ -13,7 +13,7 @@ primrec instruction_conv :: "stack_instruction \<Rightarrow> assembly list" wher
 | "instruction_conv Or = [AAssm 0, CAssm {A} (Reg M), CAssm {D} (Reg M), AAssm 0, CAssm {A, M} (Decr M), CAssm {M} DOrM]"
 | "instruction_conv Not = [AAssm 0, CAssm {A} (Reg M), CAssm {D} (NotR M)]"
 
-fun program_convert :: "stack_program \<Rightarrow> assembly_program" where
+fun program_convert :: "stack_program \<Rightarrow> linear_assembly_program" where
   "program_convert [] = []"
  |"program_convert ((s, \<pi>) # \<Pi>) = (s, concat (map instruction_conv \<pi>)) # program_convert \<Pi>"
 
@@ -115,17 +115,18 @@ lemma eval_stack_conv [simp]: "eval_stack \<Pi> \<Sigma>\<^sub>S = Some \<Sigma>
 
 theorem stack_to_assembly_correct [simp]: "iterate (eval_stack \<Pi>) \<Sigma>\<^sub>S \<Sigma>\<^sub>S' \<Longrightarrow> 
   \<Sigma>\<^sub>A \<in> state_convert \<Sigma>\<^sub>S \<Longrightarrow> 
-    \<exists>\<Sigma>\<^sub>A'. \<Sigma>\<^sub>A' \<in> state_convert \<Sigma>\<^sub>S' \<and> iterate (eval_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A \<Sigma>\<^sub>A'"
+    \<exists>\<Sigma>\<^sub>A'. \<Sigma>\<^sub>A' \<in> state_convert \<Sigma>\<^sub>S' \<and> iterate (eval_linear_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A \<Sigma>\<^sub>A'"
   proof (induction "eval_stack \<Pi>" \<Sigma>\<^sub>S \<Sigma>\<^sub>S' arbitrary: \<Sigma>\<^sub>A rule: iterate.induct)
   case iter_refl
     thus ?case by fastforce
   next case (iter_step \<Sigma>\<^sub>S \<Sigma>\<^sub>S' \<Sigma>\<^sub>S'')
     then obtain \<Sigma>\<^sub>A' where S: "\<Sigma>\<^sub>A' \<in> state_convert \<Sigma>\<^sub>S' \<and> 
-      iterate (eval_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A \<Sigma>\<^sub>A'" by blast
+      iterate (eval_linear_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A \<Sigma>\<^sub>A'" by blast
     with iter_step eval_stack_conv obtain \<Sigma>\<^sub>A'' where
-      "\<Sigma>\<^sub>A'' \<in> state_convert \<Sigma>\<^sub>S'' \<and> iterate (eval_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A' \<Sigma>\<^sub>A''" by blast
-    with S have "\<Sigma>\<^sub>A'' \<in> state_convert \<Sigma>\<^sub>S'' \<and> iterate (eval_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A \<Sigma>\<^sub>A''" 
-      by fastforce
+        "\<Sigma>\<^sub>A'' \<in> state_convert \<Sigma>\<^sub>S'' \<and> iterate (eval_linear_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A' \<Sigma>\<^sub>A''" 
+      by blast
+    with S have "\<Sigma>\<^sub>A'' \<in> state_convert \<Sigma>\<^sub>S'' \<and> 
+      iterate (eval_linear_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A \<Sigma>\<^sub>A''" by fastforce
     thus ?case by blast
   qed
 
