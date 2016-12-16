@@ -1,5 +1,5 @@
 theory MachineLanguage
-imports BasicComputation
+imports CPU
 begin
 
 datatype machine_instruction =

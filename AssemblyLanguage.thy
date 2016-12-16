@@ -1,5 +1,5 @@
 theory AssemblyLanguage
-imports BasicComputation
+imports CPU
 begin
 
 datatype assembly =
