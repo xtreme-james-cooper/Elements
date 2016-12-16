@@ -26,6 +26,21 @@ primrec state_convert :: "stack_state \<Rightarrow> assembly_state set" where
 
 (* conversion correctness *)
 
+lemma [simp]: "dom (lookup (program_convert \<Pi>)) = dom (lookup \<Pi>)"
+  proof (induction \<Pi> rule: domain_distinct.induct)
+  case 1 
+    thus ?case by simp
+  next case (2 s \<pi> \<Pi>)
+    hence "dom (lookup (program_convert \<Pi>)) = dom (lookup \<Pi>)" by simp
+
+
+    have "dom (lookup (program_convert ((s, \<pi>) # \<Pi>))) = dom (lookup ((s, \<pi>) # \<Pi>))" by simp
+    thus ?case by blast
+  qed
+
+lemma [simp]: "domain_distinct \<Pi> \<Longrightarrow> domain_distinct (program_convert \<Pi>)"
+  by (induction \<Pi> rule: domain_distinct.induct) simp_all
+
 lemma eval_stack_conv [simp]: "eval_stack \<Pi> \<Sigma>\<^sub>S = Some \<Sigma>\<^sub>S' \<Longrightarrow> \<Sigma>\<^sub>A \<in> state_convert \<Sigma>\<^sub>S \<Longrightarrow> 
     \<exists>\<Sigma>\<^sub>A'. \<Sigma>\<^sub>A' \<in> state_convert \<Sigma>\<^sub>S' \<and> iterate (eval_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A \<Sigma>\<^sub>A'"
   proof (induction \<Pi> \<Sigma>\<^sub>S rule: eval_stack.induct)
