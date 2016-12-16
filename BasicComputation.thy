@@ -23,6 +23,12 @@ definition boolify :: "int \<Rightarrow> bool" where
 definition unboolify :: "bool \<Rightarrow> int" where
   "unboolify b = (if b then 1 else 0)"
 
+lemma [simp]: "unboolify (boolify i2 \<and> boolify i1) = unboolify (boolify i1 \<and> boolify i2)"
+  by (simp add: boolify_def unboolify_def)
+
+lemma [simp]: "unboolify (boolify i2 \<or> boolify i1) = unboolify (boolify i1 \<or> boolify i2)"
+  by (simp add: boolify_def unboolify_def)
+
 fun compute :: "computation \<Rightarrow> int \<Rightarrow> int \<Rightarrow> int \<Rightarrow> int" where
   "compute Zero m a d = 0"
 | "compute One m a d = 1"
