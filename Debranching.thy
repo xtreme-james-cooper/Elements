@@ -21,12 +21,12 @@ fun branch_instr_convert :: "code_label set \<Rightarrow> b_assembly list \<Righ
         \<Pi>\<^sub>1 ++ \<Pi>\<^sub>2 ++ \<Pi>\<^sub>3 ++ [s\<^sub>t \<mapsto> \<pi>\<^sub>t' @ [JAssm {EQ, LT, GT} s\<^sub>e], s\<^sub>e \<mapsto> \<pi>']))"
 | "branch_instr_convert ss (JBAssm s # \<pi>) = ([JAssm {EQ, LT, GT} s], empty)"
 
-primrec block_convert :: "code_label \<times> b_assembly list \<Rightarrow> assembly_program \<Rightarrow> assembly_program" 
-    where
-  "block_convert (s, \<pi>) \<Pi> = (let (\<pi>', \<Pi>') = branch_instr_convert (dom \<Pi>) \<pi> in \<Pi>'(s \<mapsto> \<pi>'))"
+primrec block_convert :: "code_label set \<Rightarrow> code_label \<times> b_assembly list \<Rightarrow> assembly_program \<Rightarrow> 
+    assembly_program" where
+  "block_convert ss (s, \<pi>) \<Pi> = (let (\<pi>', \<Pi>') = branch_instr_convert (ss \<union> dom \<Pi>) \<pi> in \<Pi>'(s \<mapsto> \<pi>'))"
 
 definition debranch :: "b_assembly_program \<Rightarrow> assembly_program" where
-  "debranch \<Pi> = finite_map_fold block_convert empty \<Pi>"
+  "debranch \<Pi> = finite_map_fold (block_convert (dom \<Pi>)) empty \<Pi>"
 
 fun state_convert :: "code_label set \<Rightarrow> b_assembly_state \<Rightarrow> assembly_state" where
   "state_convert ss (\<mu>, a, d, \<pi>) = (let (\<pi>', _) = branch_instr_convert ss \<pi> in (\<mu>, a, d, \<pi>'))"
@@ -63,11 +63,12 @@ lemma [simp]: "branch_instr_convert ss \<pi>\<^sub>B = (\<pi>\<^sub>A, \<Pi>) \<
     thus ?case by auto
   qed
 
-lemma finite_block_convert: "finite (dom \<Pi>) \<Longrightarrow> finite (dom (block_convert (s, \<pi>) \<Pi>))"
-  by (cases "branch_instr_convert (dom \<Pi>) \<pi>") auto
+lemma finite_block_convert: "finite (dom \<Pi>) \<Longrightarrow> finite ss \<Longrightarrow> 
+    finite (dom (block_convert ss (s, \<pi>) \<Pi>))"
+  by (cases "branch_instr_convert (ss \<union> dom \<Pi>) \<pi>") auto
 
 lemma [simp]: "finite (dom \<Pi>) \<Longrightarrow> finite (dom (debranch \<Pi>))"
-  proof (induction "block_convert" "empty :: code_label \<Rightarrow> assembly list option" \<Pi> 
+  proof (induction "block_convert (dom \<Pi>)" "empty :: code_label \<Rightarrow> assembly list option" \<Pi> 
          rule: finite_map_fold.induct)
   case 1
     thus ?case by simp
@@ -75,15 +76,14 @@ lemma [simp]: "finite (dom \<Pi>) \<Longrightarrow> finite (dom (debranch \<Pi>)
     thus ?case by (simp add: debranch_def)
   next case (3 \<Pi>)
     let ?x = "SOME x. x \<in> dom \<Pi>"
-    from 3 have "finite (dom (debranch (\<Pi>(?x := None))))" by simp
-    hence "finite (dom (block_convert (?x, the (\<Pi> ?x)) (debranch (\<Pi>(?x := None)))))" 
-      by (metis finite_block_convert)
-    with 3 show ?case by (simp add: Let_def debranch_def)
+
+    have "finite (dom (debranch \<Pi>))" by simp
+    thus ?case by simp
   qed
 
 lemma [simp]: "finite (dom \<Pi>) \<Longrightarrow> \<Pi> s = Some \<pi>\<^sub>B \<Longrightarrow> branch_instr_convert (dom \<Pi>) \<pi>\<^sub>B = (\<pi>\<^sub>A, \<Pi>') \<Longrightarrow> 
     debranch \<Pi> s = Some \<pi>\<^sub>A"
-  proof (induction "block_convert" "empty :: code_label \<Rightarrow> assembly list option" \<Pi> 
+  proof (induction "block_convert (dom \<Pi>)" "empty :: code_label \<Rightarrow> assembly list option" \<Pi> 
          rule: finite_map_fold.induct)
   case 1
     thus ?case by simp
@@ -91,33 +91,9 @@ lemma [simp]: "finite (dom \<Pi>) \<Longrightarrow> \<Pi> s = Some \<pi>\<^sub>B
     thus ?case by simp
   next case (3 \<Pi>)
     let ?x = "SOME x. x \<in> dom \<Pi>"
-    show ?case
-      proof (cases "s = ?x")
-      case True
-        from 3 have "finite (dom \<Pi>)" by simp
-        from 3 have "card (dom \<Pi>) \<noteq> 0" by simp
-        from 3 have "(\<Pi>(?x := None)) s = Some \<pi>\<^sub>B \<Longrightarrow> branch_instr_convert (dom (\<Pi>(?x := None))) \<pi>\<^sub>B = (\<pi>\<^sub>A, \<Pi>') \<Longrightarrow> debranch (\<Pi>(?x := None)) s = Some \<pi>\<^sub>A" by simp
-        from 3 have "\<Pi> s = Some \<pi>\<^sub>B" by simp
-        from 3 have "branch_instr_convert (dom \<Pi>) \<pi>\<^sub>B = (\<pi>\<^sub>A, \<Pi>')" by simp
-   
- 
-    
-        have "block_convert (s, the (\<Pi> s)) (debranch (\<Pi>(s := None))) s = Some \<pi>\<^sub>A" by simp
-        with True have "block_convert (?x, the (\<Pi> ?x)) (debranch (\<Pi>(?x := None))) s = Some \<pi>\<^sub>A" by simp
-        with 3 show ?thesis by (simp add: Let_def debranch_def)
-      next case False
-        from 3 have "finite (dom \<Pi>)" by simp
-        from 3 have "card (dom \<Pi>) \<noteq> 0" by simp
-        from 3 have "(\<Pi>(?x := None)) s = Some \<pi>\<^sub>B \<Longrightarrow> branch_instr_convert (dom (\<Pi>(?x := None))) \<pi>\<^sub>B = (\<pi>\<^sub>A, \<Pi>') \<Longrightarrow> debranch (\<Pi>(?x := None)) s = Some \<pi>\<^sub>A" by simp
-        from 3 have "\<Pi> s = Some \<pi>\<^sub>B" by simp
-        from 3 have "branch_instr_convert (dom \<Pi>) \<pi>\<^sub>B = (\<pi>\<^sub>A, \<Pi>')" by simp
-    
-    
 
-
-        have "block_convert (?x, the (\<Pi> ?x)) (debranch (\<Pi>(?x := None))) s = Some \<pi>\<^sub>A" by simp
-        with 3 show ?thesis by (simp add: Let_def debranch_def)
-      qed
+    have "debranch \<Pi> s = Some \<pi>\<^sub>A" by simp
+    show ?case by simp
   qed
 
 lemma [simp]: "eval_b_assembly \<Pi> \<Sigma>\<^sub>B = Some \<Sigma>\<^sub>B' \<Longrightarrow> finite (dom \<Pi>) \<Longrightarrow>
@@ -150,7 +126,13 @@ lemma [simp]: "eval_b_assembly \<Pi> \<Sigma>\<^sub>B = Some \<Sigma>\<^sub>B' \
       qed
   next case 4
     thus ?case by simp
-  next case 5
+  next case (5 \<Pi> \<mu> a d cmp \<pi>\<^sub>t \<pi>\<^sub>f \<pi>)
+    from 5 have "eval_b_assembly \<Pi> (\<mu>, a, d, IBAssm cmp \<pi>\<^sub>t \<pi>\<^sub>f # \<pi>) = Some \<Sigma>\<^sub>B'" by simp
+    from 5 have "finite (dom \<Pi>)" by simp
+
+
+
+    have "iterate (eval_assembly (debranch \<Pi>)) (state_convert (dom \<Pi>) (\<mu>, a, d, IBAssm cmp \<pi>\<^sub>t \<pi>\<^sub>f # \<pi>)) (state_convert (dom \<Pi>) \<Sigma>\<^sub>B')" by simp
     thus ?case by simp
   next case (6 \<Pi> \<mu> a d s \<pi>)
     thus ?case
