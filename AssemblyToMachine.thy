@@ -224,7 +224,7 @@ lemma eval_assembly_conv [simp]: "domain_distinct \<Pi> \<Longrightarrow> eval_l
     with next_pc have X: "(\<mu>, x, d, Suc pc) \<in> state_convert \<Pi> (\<mu>, Some x, d, \<pi>)" by fastforce
     from 2 P lookup_convert have "eval_machine (program_convert \<Pi>) (\<mu>, aa, d, pc) = 
       Some (\<mu>, x, d, Suc pc)" by fastforce
-    with X S P show ?case by fast
+    with X S P iter_one show ?case by fast
   next case (3 \<Pi> \<mu> a d dst cmp \<pi>)
     let ?n = "compute cmp (\<mu> a) a d"
     let ?\<mu> = "if M \<in> dst then \<mu>(a := ?n) else \<mu>"
@@ -237,7 +237,7 @@ lemma eval_assembly_conv [simp]: "domain_distinct \<Pi> \<Longrightarrow> eval_l
       by (simp add: Let_def)
     with 3 P lookup_convert have "eval_machine (program_convert \<Pi>) (\<mu>, a, d, pc) = 
       Some (?\<mu>, ?a, ?d, Suc pc)" by fastforce
-    with X S P show ?case by fast
+    with X S P iter_one show ?case by fast
   next case 4
     thus ?case by simp
   next case (5 \<Pi> \<mu> a d jmp s \<pi>)
@@ -256,7 +256,7 @@ lemma eval_assembly_conv [simp]: "domain_distinct \<Pi> \<Longrightarrow> eval_l
             have "1 < machine_length (JAssm jmp s)" by simp
             with 5 P lookup_convert True have "eval_machine (program_convert \<Pi>) (\<mu>, ?s, d, Suc pc) = 
               Some (\<mu>, ?s, d, nat ?s)" by fastforce
-            with first_step X P S show ?thesis by fast
+            with first_step X P S iter_two show ?thesis by fast
           next case None
             with 5 True show ?thesis by simp
           qed
@@ -269,7 +269,7 @@ lemma eval_assembly_conv [simp]: "domain_distinct \<Pi> \<Longrightarrow> eval_l
         have "1 < machine_length (JAssm jmp s)" by simp
         with 5 P Y lookup_convert have "eval_machine (program_convert \<Pi>) (\<mu>, ?s, d, Suc pc) =
           Some (\<mu>, ?s, d, Suc (Suc pc))" by fastforce
-        with first_step X P S show ?thesis by fast
+        with first_step X P S iter_two show ?thesis by fast
       qed
   qed
 
