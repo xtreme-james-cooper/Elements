@@ -11,7 +11,7 @@ primrec converted_length :: "assembly list \<Rightarrow> nat" where
   "converted_length [] = 0"
 | "converted_length (\<iota> # \<pi>) = machine_length \<iota> + converted_length \<pi>"
 
-fun build_symbol_table :: "program \<Rightarrow> symbol \<rightharpoonup> nat" where
+fun build_symbol_table :: "assembly_program \<Rightarrow> symbol \<rightharpoonup> nat" where
   "build_symbol_table [] s = None"
 | "build_symbol_table ((s', \<pi>) # \<Pi>) s = (
     if s' = s then Some 0 
@@ -20,22 +20,22 @@ fun build_symbol_table :: "program \<Rightarrow> symbol \<rightharpoonup> nat" w
 definition get_block_addr :: "(symbol \<rightharpoonup> nat) \<Rightarrow> symbol \<Rightarrow> int" where
   "get_block_addr \<rho> s = int (the (\<rho> s))"
 
-primrec instruction_conv :: "(symbol \<rightharpoonup> nat) \<Rightarrow> assembly \<Rightarrow> machine_instruction list" where
+primrec instruction_conv :: "(symbol \<rightharpoonup> nat) \<Rightarrow> assembly \<Rightarrow> machine_program" where
   "instruction_conv \<rho> (AAssm x) = [AInstr x]"
 | "instruction_conv \<rho> (CAssm dst cmp) = [CInstr dst cmp {}]"
 | "instruction_conv \<rho> (JAssm jmp s) = [AInstr (get_block_addr \<rho> s), CInstr {} (Reg D) jmp]"
 
-definition get_assembly :: "program \<Rightarrow> assembly list" where
+definition get_assembly :: "assembly_program \<Rightarrow> assembly list" where
   "get_assembly \<Pi> = concat (map snd \<Pi>)"
 
-definition program_convert :: "program \<Rightarrow> machine_instruction list" where
+definition program_convert :: "assembly_program \<Rightarrow> machine_program" where
   "program_convert \<Pi> = concat (map (instruction_conv (build_symbol_table \<Pi>)) (get_assembly \<Pi>))"
 
-definition get_pc :: "program \<Rightarrow> assembly list \<Rightarrow> nat set" where
+definition get_pc :: "assembly_program \<Rightarrow> assembly list \<Rightarrow> nat set" where
   "get_pc \<Pi> \<pi> = 
     { the (build_symbol_table \<Pi> s) + converted_length \<pi>' | s \<pi>'. lookup \<Pi> s = Some (\<pi>' @ \<pi>) }"
 
-fun state_convert :: "program \<Rightarrow> assembly_state \<Rightarrow> machine_state set" where
+fun state_convert :: "assembly_program \<Rightarrow> assembly_state \<Rightarrow> machine_state set" where
   "state_convert \<Pi> (\<mu>, Some a, d, \<pi>) = {(\<mu>, a, d, pc) | pc. pc \<in> get_pc \<Pi> \<pi>}"
 | "state_convert \<Pi> (\<mu>, None, d, \<pi>) = {(\<mu>, a, d, pc) | a pc. pc \<in> get_pc \<Pi> \<pi>}"
 
@@ -273,8 +273,8 @@ lemma eval_assembly_conv [simp]: "domain_distinct \<Pi> \<Longrightarrow> eval_a
       qed
   qed
 
-theorem [simp]: "iterate (eval_assembly \<Pi>) \<Sigma> \<Sigma>\<^sub>1 \<Longrightarrow> \<Sigma>' \<in> state_convert \<Pi> \<Sigma> \<Longrightarrow> 
-  domain_distinct \<Pi> \<Longrightarrow> 
+theorem assembly_to_machine_correct [simp]: "iterate (eval_assembly \<Pi>) \<Sigma> \<Sigma>\<^sub>1 \<Longrightarrow> 
+  \<Sigma>' \<in> state_convert \<Pi> \<Sigma> \<Longrightarrow> domain_distinct \<Pi> \<Longrightarrow> 
     \<exists>\<Sigma>\<^sub>1'. \<Sigma>\<^sub>1' \<in> state_convert \<Pi> \<Sigma>\<^sub>1 \<and> iterate (eval_machine (program_convert \<Pi>)) \<Sigma>' \<Sigma>\<^sub>1'"
   proof (induction "eval_assembly \<Pi>" \<Sigma> \<Sigma>\<^sub>1 arbitrary: \<Sigma>' rule: iterate.induct)
   case iter_refl

@@ -2,6 +2,8 @@ theory BasicComputation
 imports Main
 begin
 
+typedecl symbol
+
 type_synonym memory = "int \<Rightarrow> int"
 
 datatype register = A | D | M
@@ -9,7 +11,7 @@ datatype register = A | D | M
 datatype comparison = LT | EQ | GT
 
 datatype computation = 
-  Zero | One | NegOne | Reg register | Not register | Neg register | Incr register | Decr register 
+  Zero | One | NegOne | Reg register | NotR register | NegR register | Incr register | Decr register 
 | DPlusA | DPlusM | DMinusA | DMinusM | AMinusD | MMinusD | DAndA | DAndM | DOrA | DOrM
 
 fun should_jump :: "int \<Rightarrow> comparison set \<Rightarrow> bool" where
@@ -28,12 +30,12 @@ fun compute :: "computation \<Rightarrow> int \<Rightarrow> int \<Rightarrow> in
 | "compute (Reg M) m a d = m"
 | "compute (Reg A) m a d = a"
 | "compute (Reg D) m a d = d"
-| "compute (Not M) m a d = unboolify (\<not> boolify m)"
-| "compute (Not A) m a d = unboolify (\<not> boolify a)"
-| "compute (Not D) m a d = unboolify (\<not> boolify d)"
-| "compute (Neg M) m a d = -m"
-| "compute (Neg A) m a d = -a"
-| "compute (Neg D) m a d = -d"
+| "compute (NotR M) m a d = unboolify (\<not> boolify m)"
+| "compute (NotR A) m a d = unboolify (\<not> boolify a)"
+| "compute (NotR D) m a d = unboolify (\<not> boolify d)"
+| "compute (NegR M) m a d = -m"
+| "compute (NegR A) m a d = -a"
+| "compute (NegR D) m a d = -d"
 | "compute (Incr M) m a d = m + 1"
 | "compute (Incr A) m a d = a + 1"
 | "compute (Incr D) m a d = d + 1"
