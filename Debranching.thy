@@ -1,5 +1,5 @@
 theory Debranching
-imports BranchingAssemblyLanguage AssemblyLanguage Iterate
+imports BranchingAssemblyLanguage AssemblyLanguage Iterate FiniteMap
 begin
 
 fun branch_instr_convert :: "code_label set \<Rightarrow> branching_assembly list \<Rightarrow> 
@@ -23,8 +23,12 @@ fun branch_instr_convert :: "code_label set \<Rightarrow> branching_assembly lis
     let (\<pi>', \<Pi>) = branch_instr_convert ss \<pi>
     in (JAssm {EQ, LT, GT} s # \<pi>', \<Pi>))"
 
+primrec block_convert :: "code_label \<times> branching_assembly list \<Rightarrow> assembly_program \<Rightarrow> 
+    assembly_program" where
+  "block_convert (s, \<pi>) \<Pi> = (let (\<pi>', \<Pi>') = branch_instr_convert (dom \<Pi>) \<pi> in \<Pi>'(s \<mapsto> \<pi>'))"
+
 definition program_convert :: "branching_assembly_program \<Rightarrow> assembly_program" where
-  "program_convert \<Pi> = undefined"
+  "program_convert \<Pi> = finite_map_fold block_convert empty \<Pi>"
 
 definition state_convert :: "branching_assembly_state \<Rightarrow> assembly_state set" where
   "state_convert \<Sigma> = undefined"

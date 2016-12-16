@@ -1,5 +1,5 @@
 theory TotalCorrectness
-imports AssemblyToMachine StackToAssembly
+imports AssemblyToMachine Debranching StackToAssembly
 begin
 
 definition state_convert :: "stack_program \<Rightarrow> stack_state \<Rightarrow> machine_state set" where
