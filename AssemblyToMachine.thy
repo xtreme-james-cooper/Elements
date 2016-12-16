@@ -212,15 +212,15 @@ lemma next_pc: "pc \<in> get_pc \<Pi> (\<iota> # \<pi>) \<Longrightarrow> machin
 lemma [simp]: "\<Sigma> \<in> state_convert \<Pi> (\<mu>, a, d, \<pi>) \<Longrightarrow> \<exists>aa pc. \<Sigma> = (\<mu>, aa, d, pc) \<and> pc \<in> get_pc \<Pi> \<pi>"
   by (cases a) auto
 
-lemma eval_assembly_conv [simp]: "domain_distinct \<Pi> \<Longrightarrow> eval_assembly \<Pi> \<Sigma> = Some \<Sigma>\<^sub>1 \<Longrightarrow> 
-  \<Sigma>' \<in> state_convert \<Pi> \<Sigma> \<Longrightarrow>
-    \<exists>\<Sigma>\<^sub>1'. \<Sigma>\<^sub>1' \<in> state_convert \<Pi> \<Sigma>\<^sub>1 \<and> iterate (eval_machine (program_convert \<Pi>)) \<Sigma>' \<Sigma>\<^sub>1'"
-  proof (induction \<Pi> \<Sigma> rule: eval_assembly.induct)
+lemma eval_assembly_conv [simp]: "domain_distinct \<Pi> \<Longrightarrow> eval_assembly \<Pi> \<Sigma>\<^sub>A = Some \<Sigma>\<^sub>A' \<Longrightarrow> 
+  \<Sigma>\<^sub>M \<in> state_convert \<Pi> \<Sigma>\<^sub>A \<Longrightarrow>
+    \<exists>\<Sigma>\<^sub>M'. \<Sigma>\<^sub>M' \<in> state_convert \<Pi> \<Sigma>\<^sub>A' \<and> iterate (eval_machine (program_convert \<Pi>)) \<Sigma>\<^sub>M \<Sigma>\<^sub>M'"
+  proof (induction \<Pi> \<Sigma>\<^sub>A rule: eval_assembly.induct)
   case 1
     thus ?case by simp
   next case (2 \<Pi> \<mu> a d x \<pi>)
-    from 2 have S: "\<Sigma>\<^sub>1 = (\<mu>, Some x, d, \<pi>)" by simp
-    from 2 obtain pc aa where P: "\<Sigma>' = (\<mu>, aa, d, pc) \<and> pc \<in> get_pc \<Pi> (AAssm x # \<pi>)" by fastforce
+    from 2 have S: "\<Sigma>\<^sub>A' = (\<mu>, Some x, d, \<pi>)" by simp
+    from 2 obtain pc aa where P: "\<Sigma>\<^sub>M = (\<mu>, aa, d, pc) \<and> pc \<in> get_pc \<Pi> (AAssm x # \<pi>)" by fastforce
     with next_pc have X: "(\<mu>, x, d, Suc pc) \<in> state_convert \<Pi> (\<mu>, Some x, d, \<pi>)" by fastforce
     from 2 P lookup_convert have "eval_machine (program_convert \<Pi>) (\<mu>, aa, d, pc) = 
       Some (\<mu>, x, d, Suc pc)" by fastforce
@@ -230,8 +230,8 @@ lemma eval_assembly_conv [simp]: "domain_distinct \<Pi> \<Longrightarrow> eval_a
     let ?\<mu> = "if M \<in> dst then \<mu>(a := ?n) else \<mu>"
     let ?a = "if A \<in> dst then ?n else a"
     let ?d = "if D \<in> dst then ?n else d"
-    from 3 have S: "\<Sigma>\<^sub>1 = (?\<mu>, Some ?a, ?d, \<pi>)" by (simp add: Let_def)
-    from 3 obtain pc where P: "\<Sigma>' = (\<mu>, a, d, pc) \<and> pc \<in> get_pc \<Pi> (CAssm dst cmp # \<pi>)" by fastforce
+    from 3 have S: "\<Sigma>\<^sub>A' = (?\<mu>, Some ?a, ?d, \<pi>)" by (simp add: Let_def)
+    from 3 obtain pc where P: "\<Sigma>\<^sub>M = (\<mu>, a, d, pc) \<and> pc \<in> get_pc \<Pi> (CAssm dst cmp # \<pi>)" by fastforce
     with next_pc have X: "(?\<mu>, ?a, ?d, Suc pc) \<in> state_convert \<Pi> (?\<mu>, Some ?a, ?d, \<pi>)" by fastforce
     have "eval_instruction (CInstr dst cmp {}) (\<mu>, a, d, pc) = (?\<mu>, ?a, ?d, Suc pc)" 
       by (simp add: Let_def)
@@ -241,7 +241,7 @@ lemma eval_assembly_conv [simp]: "domain_distinct \<Pi> \<Longrightarrow> eval_a
   next case 4
     thus ?case by simp
   next case (5 \<Pi> \<mu> a d jmp s \<pi>)
-    then obtain pc aa where P: "\<Sigma>' = (\<mu>, aa, d, pc) \<and> pc \<in> get_pc \<Pi> (JAssm jmp s # \<pi>)" by fastforce
+    then obtain pc aa where P: "\<Sigma>\<^sub>M = (\<mu>, aa, d, pc) \<and> pc \<in> get_pc \<Pi> (JAssm jmp s # \<pi>)" by fastforce
     let ?s = "get_block_addr (build_symbol_table \<Pi>) s"
     from 5 P lookup_convert have first_step: "eval_machine (program_convert \<Pi>) (\<mu>, aa, d, pc) = 
       Some (\<mu>, ?s, d, Suc pc)" by fastforce
@@ -251,7 +251,7 @@ lemma eval_assembly_conv [simp]: "domain_distinct \<Pi> \<Longrightarrow> eval_a
         thus ?thesis
           proof (cases "lookup \<Pi> s")
           case (Some \<pi>')
-            with 5 True have S: "\<Sigma>\<^sub>1 = (\<mu>, None, d, \<pi>')" by simp
+            with 5 True have S: "\<Sigma>\<^sub>A' = (\<mu>, None, d, \<pi>')" by simp
             from Some have X: "(\<mu>, ?s, d, nat ?s) \<in> state_convert \<Pi> (\<mu>, None, d, \<pi>')" by simp
             have "1 < machine_length (JAssm jmp s)" by simp
             with 5 P lookup_convert True have "eval_machine (program_convert \<Pi>) (\<mu>, ?s, d, Suc pc) = 
@@ -261,7 +261,7 @@ lemma eval_assembly_conv [simp]: "domain_distinct \<Pi> \<Longrightarrow> eval_a
             with 5 True show ?thesis by simp
           qed
       next case False
-        from 5 False have S: "\<Sigma>\<^sub>1 = (\<mu>, None, d, \<pi>)" by auto
+        from 5 False have S: "\<Sigma>\<^sub>A' = (\<mu>, None, d, \<pi>)" by auto
         from P next_pc have X: "(\<mu>, ?s, d, Suc (Suc pc)) \<in> state_convert \<Pi> (\<mu>, None, d, \<pi>)" 
           by fastforce
         from False have Y: "eval_instruction (CInstr {} (Reg D) jmp) (\<mu>, ?s, d, Suc pc) = 
@@ -273,18 +273,18 @@ lemma eval_assembly_conv [simp]: "domain_distinct \<Pi> \<Longrightarrow> eval_a
       qed
   qed
 
-theorem assembly_to_machine_correct [simp]: "iterate (eval_assembly \<Pi>) \<Sigma> \<Sigma>\<^sub>1 \<Longrightarrow> 
-  \<Sigma>' \<in> state_convert \<Pi> \<Sigma> \<Longrightarrow> domain_distinct \<Pi> \<Longrightarrow> 
-    \<exists>\<Sigma>\<^sub>1'. \<Sigma>\<^sub>1' \<in> state_convert \<Pi> \<Sigma>\<^sub>1 \<and> iterate (eval_machine (program_convert \<Pi>)) \<Sigma>' \<Sigma>\<^sub>1'"
-  proof (induction "eval_assembly \<Pi>" \<Sigma> \<Sigma>\<^sub>1 arbitrary: \<Sigma>' rule: iterate.induct)
+theorem assembly_to_machine_correct [simp]: "iterate (eval_assembly \<Pi>) \<Sigma>\<^sub>A \<Sigma>\<^sub>A' \<Longrightarrow> 
+  \<Sigma>\<^sub>M \<in> state_convert \<Pi> \<Sigma>\<^sub>A \<Longrightarrow> domain_distinct \<Pi> \<Longrightarrow> 
+    \<exists>\<Sigma>\<^sub>M'. \<Sigma>\<^sub>M' \<in> state_convert \<Pi> \<Sigma>\<^sub>A' \<and> iterate (eval_machine (program_convert \<Pi>)) \<Sigma>\<^sub>M \<Sigma>\<^sub>M'"
+  proof (induction "eval_assembly \<Pi>" \<Sigma>\<^sub>A \<Sigma>\<^sub>A' arbitrary: \<Sigma>\<^sub>M rule: iterate.induct)
   case iter_refl
     thus ?case by fastforce
-  next case (iter_step \<Sigma> \<Sigma>\<^sub>1 \<Sigma>\<^sub>2)
-    then obtain \<Sigma>\<^sub>1' where S: "\<Sigma>\<^sub>1' \<in> state_convert \<Pi> \<Sigma>\<^sub>1 \<and> 
-      iterate (eval_machine (program_convert \<Pi>)) \<Sigma>' \<Sigma>\<^sub>1'" by blast
-    with iter_step eval_assembly_conv obtain \<Sigma>\<^sub>2' where
-      "\<Sigma>\<^sub>2' \<in> state_convert \<Pi> \<Sigma>\<^sub>2 \<and> iterate (eval_machine (program_convert \<Pi>)) \<Sigma>\<^sub>1' \<Sigma>\<^sub>2'" by blast
-    with S have "\<Sigma>\<^sub>2' \<in> state_convert \<Pi> \<Sigma>\<^sub>2 \<and> iterate (eval_machine (program_convert \<Pi>)) \<Sigma>' \<Sigma>\<^sub>2'" 
+  next case (iter_step \<Sigma>\<^sub>A \<Sigma>\<^sub>A' \<Sigma>\<^sub>A'')
+    then obtain \<Sigma>\<^sub>M' where S: "\<Sigma>\<^sub>M' \<in> state_convert \<Pi> \<Sigma>\<^sub>A' \<and> 
+      iterate (eval_machine (program_convert \<Pi>)) \<Sigma>\<^sub>M \<Sigma>\<^sub>M'" by blast
+    with iter_step eval_assembly_conv obtain \<Sigma>\<^sub>M'' where
+      "\<Sigma>\<^sub>M'' \<in> state_convert \<Pi> \<Sigma>\<^sub>A'' \<and> iterate (eval_machine (program_convert \<Pi>)) \<Sigma>\<^sub>M' \<Sigma>\<^sub>M''" by blast
+    with S have "\<Sigma>\<^sub>M'' \<in> state_convert \<Pi> \<Sigma>\<^sub>A'' \<and> iterate (eval_machine (program_convert \<Pi>)) \<Sigma>\<^sub>M \<Sigma>\<^sub>M''" 
       by fastforce
     thus ?case by blast
   qed
