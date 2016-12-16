@@ -2,7 +2,7 @@ theory Debranching
 imports BranchingAssemblyLanguage AssemblyLanguage Iterate FiniteMap
 begin
 
-fun branch_instr_convert :: "code_label set \<Rightarrow> branching_assembly list \<Rightarrow> 
+fun branch_instr_convert :: "code_label set \<Rightarrow> b_assembly list \<Rightarrow> 
     assembly list \<times> (code_label \<rightharpoonup> assembly list)" where
   "branch_instr_convert ss [] = ([], empty)"
 | "branch_instr_convert ss (ABAssm x # \<pi>) = (
@@ -19,41 +19,55 @@ fun branch_instr_convert :: "code_label set \<Rightarrow> branching_assembly lis
     in let s\<^sub>e = new_label (ss \<union> dom \<Pi>\<^sub>1 \<union> dom \<Pi>\<^sub>2 \<union> dom \<Pi>\<^sub>3 \<union> {s\<^sub>t})
     in (JAssm jmp s\<^sub>t # \<pi>\<^sub>f' @ [JAssm {EQ, LT, GT} s\<^sub>e], 
         \<Pi>\<^sub>1 ++ \<Pi>\<^sub>2 ++ \<Pi>\<^sub>3 ++ [s\<^sub>t \<mapsto> \<pi>\<^sub>t' @ [JAssm {EQ, LT, GT} s\<^sub>e], s\<^sub>e \<mapsto> \<pi>']))"
-| "branch_instr_convert ss (JBAssm s # \<pi>) = (
-    let (\<pi>', \<Pi>) = branch_instr_convert ss \<pi>
-    in (JAssm {EQ, LT, GT} s # \<pi>', \<Pi>))"
+| "branch_instr_convert ss (JBAssm s # \<pi>) = ([JAssm {EQ, LT, GT} s], empty)"
 
-primrec block_convert :: "code_label \<times> branching_assembly list \<Rightarrow> assembly_program \<Rightarrow> 
-    assembly_program" where
+primrec block_convert :: "code_label \<times> b_assembly list \<Rightarrow> assembly_program \<Rightarrow> assembly_program" 
+    where
   "block_convert (s, \<pi>) \<Pi> = (let (\<pi>', \<Pi>') = branch_instr_convert (dom \<Pi>) \<pi> in \<Pi>'(s \<mapsto> \<pi>'))"
 
-definition program_convert :: "branching_assembly_program \<Rightarrow> assembly_program" where
-  "program_convert \<Pi> = finite_map_fold block_convert empty \<Pi>"
+definition debranch :: "b_assembly_program \<Rightarrow> assembly_program" where
+  "debranch \<Pi> = finite_map_fold block_convert empty \<Pi>"
 
-definition state_convert :: "branching_assembly_state \<Rightarrow> assembly_state set" where
-  "state_convert \<Sigma> = undefined"
+fun state_convert :: "code_label set \<Rightarrow> b_assembly_state \<Rightarrow> assembly_state" where
+  "state_convert ss (\<mu>, a, d, \<pi>) = (let (\<pi>', _) = branch_instr_convert ss \<pi> in (\<mu>, a, d, \<pi>'))"
 
 (* conversion correctness *)
 
-lemma eval_debranch_conv [simp]: "eval_branching_assembly \<Pi> \<Sigma>\<^sub>B = Some \<Sigma>\<^sub>B' \<Longrightarrow> 
-  \<Sigma>\<^sub>A \<in> state_convert \<Sigma>\<^sub>B \<Longrightarrow>
-    \<exists>\<Sigma>\<^sub>A'. \<Sigma>\<^sub>A' \<in> state_convert \<Sigma>\<^sub>B' \<and> iterate (eval_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A \<Sigma>\<^sub>A'"
+lemma [simp]: "finite (dom \<Pi>) \<Longrightarrow> finite (dom (debranch \<Pi>))"
   by simp
 
-theorem debranching_correct [simp]: "iterate (eval_branching_assembly \<Pi>) \<Sigma>\<^sub>B \<Sigma>\<^sub>B' \<Longrightarrow> 
-  \<Sigma>\<^sub>A \<in> state_convert \<Sigma>\<^sub>B \<Longrightarrow> 
-    \<exists>\<Sigma>\<^sub>A'. \<Sigma>\<^sub>A' \<in> state_convert \<Sigma>\<^sub>B' \<and> iterate (eval_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A \<Sigma>\<^sub>A'"
-  proof (induction "eval_branching_assembly \<Pi>" \<Sigma>\<^sub>B \<Sigma>\<^sub>B' arbitrary: \<Sigma>\<^sub>A rule: iterate.induct)
+lemma [simp]: "eval_b_assembly \<Pi> \<Sigma>\<^sub>B = Some \<Sigma>\<^sub>B' \<Longrightarrow> 
+    iterate (eval_assembly (program_convert \<Pi>)) 
+      (state_convert (dom \<Pi>) \<Sigma>\<^sub>B) (state_convert (dom \<Pi>) \<Sigma>\<^sub>B')"
+  proof (induction \<Pi> \<Sigma>\<^sub>B rule: eval_b_assembly.induct)
+  case 1
+    thus ?case by simp
+  next case (2 \<Pi> \<mu> a d x \<pi>)
+    thus ?case
+      proof (cases "branch_instr_convert (dom \<Pi>) \<pi>")
+      case (Pair \<pi>' \<Pi>')
+        hence S: "state_convert (dom \<Pi>) (\<mu>, a, d, ABAssm x # \<pi>) = (\<mu>, a, d, AAssm x # \<pi>')" by simp
+        from Pair have "state_convert (dom \<Pi>) (\<mu>, Some x, d, \<pi>) = (\<mu>, Some x, d, \<pi>')" by simp
+        with 2 S show ?thesis by (simp add: iter_one)
+      qed
+  next case 3
+    thus ?case by simp
+  next case 4
+    thus ?case by simp
+  next case 5
+    thus ?case by simp
+  next case 6
+    thus ?case by simp
+  qed 
+
+theorem debranching_correct [simp]: "iterate (eval_b_assembly \<Pi>) \<Sigma>\<^sub>B \<Sigma>\<^sub>B' \<Longrightarrow> 
+    iterate (eval_assembly (debranch \<Pi>)) (state_convert (dom \<Pi>) \<Sigma>\<^sub>B) (state_convert (dom \<Pi>) \<Sigma>\<^sub>B')"
+  proof (induction "eval_b_assembly \<Pi>" \<Sigma>\<^sub>B \<Sigma>\<^sub>B' rule: iterate.induct)
   case iter_refl
     thus ?case by fastforce
   next case (iter_step \<Sigma>\<^sub>B \<Sigma>\<^sub>B' \<Sigma>\<^sub>B'')
-    then obtain \<Sigma>\<^sub>A' where S: "\<Sigma>\<^sub>A' \<in> state_convert \<Sigma>\<^sub>B' \<and> 
-      iterate (eval_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A \<Sigma>\<^sub>A'" by blast
-    with iter_step eval_debranch_conv obtain \<Sigma>\<^sub>A'' where
-        "\<Sigma>\<^sub>A'' \<in> state_convert \<Sigma>\<^sub>B'' \<and> iterate (eval_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A' \<Sigma>\<^sub>A''" 
-      by blast
-    with S have "\<Sigma>\<^sub>A'' \<in> state_convert \<Sigma>\<^sub>B'' \<and> iterate (eval_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A \<Sigma>\<^sub>A''" 
-      by fastforce
+    hence "iterate (eval_assembly (debranch \<Pi>)) 
+      (state_convert (dom \<Pi>) \<Sigma>\<^sub>B) (state_convert (dom \<Pi>) \<Sigma>\<^sub>B'')" by fastforce
     thus ?case by blast
   qed
 

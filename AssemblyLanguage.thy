@@ -9,7 +9,7 @@ datatype assembly =
 
 type_synonym assembly_program = "code_label \<rightharpoonup> assembly list"
 
-type_synonym assembly_state = "memory \<times> int option \<times> int \<times> assembly list" (* \<mu>, a, d, pc *)
+type_synonym assembly_state = "memory \<times> int option \<times> int \<times> assembly list" (* \<mu>, a, d, \<pi> *)
 
 fun eval_assembly :: "assembly_program \<Rightarrow> assembly_state \<Rightarrow> assembly_state option" where
   "eval_assembly \<Pi> (\<mu>, a, d, []) = None"

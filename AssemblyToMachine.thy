@@ -11,7 +11,7 @@ primrec converted_length :: "assembly list \<Rightarrow> nat" where
   "converted_length [] = 0"
 | "converted_length (\<iota> # \<pi>) = machine_length \<iota> + converted_length \<pi>"
 
-fun build_symbol_table :: "linear_assembly_program \<Rightarrow> code_label \<rightharpoonup> nat" where
+fun build_symbol_table :: "l_assembly_program \<Rightarrow> code_label \<rightharpoonup> nat" where
   "build_symbol_table [] s = None"
 | "build_symbol_table ((s', \<pi>) # \<Pi>) s = (
     if s' = s then Some 0 
@@ -25,17 +25,17 @@ primrec instruction_conv :: "(code_label \<rightharpoonup> nat) \<Rightarrow> as
 | "instruction_conv \<rho> (CAssm dst cmp) = [CInstr dst cmp {}]"
 | "instruction_conv \<rho> (JAssm jmp s) = [AInstr (get_block_addr \<rho> s), CInstr {} (Reg D) jmp]"
 
-definition get_assembly :: "linear_assembly_program \<Rightarrow> assembly list" where
+definition get_assembly :: "l_assembly_program \<Rightarrow> assembly list" where
   "get_assembly \<Pi> = concat (map snd \<Pi>)"
 
-definition program_convert :: "linear_assembly_program \<Rightarrow> machine_program" where
+definition program_convert :: "l_assembly_program \<Rightarrow> machine_program" where
   "program_convert \<Pi> = concat (map (instruction_conv (build_symbol_table \<Pi>)) (get_assembly \<Pi>))"
 
-definition get_pc :: "linear_assembly_program \<Rightarrow> assembly list \<Rightarrow> nat set" where
+definition get_pc :: "l_assembly_program \<Rightarrow> assembly list \<Rightarrow> nat set" where
   "get_pc \<Pi> \<pi> = 
     { the (build_symbol_table \<Pi> s) + converted_length \<pi>' | s \<pi>'. lookup \<Pi> s = Some (\<pi>' @ \<pi>) }"
 
-fun state_convert :: "linear_assembly_program \<Rightarrow> assembly_state \<Rightarrow> machine_state set" where
+fun state_convert :: "l_assembly_program \<Rightarrow> assembly_state \<Rightarrow> machine_state set" where
   "state_convert \<Pi> (\<mu>, Some a, d, \<pi>) = {(\<mu>, a, d, pc) | pc. pc \<in> get_pc \<Pi> \<pi>}"
 | "state_convert \<Pi> (\<mu>, None, d, \<pi>) = {(\<mu>, a, d, pc) | a pc. pc \<in> get_pc \<Pi> \<pi>}"
 
@@ -212,10 +212,10 @@ lemma next_pc: "pc \<in> get_pc \<Pi> (\<iota> # \<pi>) \<Longrightarrow> machin
 lemma [simp]: "\<Sigma> \<in> state_convert \<Pi> (\<mu>, a, d, \<pi>) \<Longrightarrow> \<exists>aa pc. \<Sigma> = (\<mu>, aa, d, pc) \<and> pc \<in> get_pc \<Pi> \<pi>"
   by (cases a) auto
 
-lemma eval_assembly_conv [simp]: "domain_distinct \<Pi> \<Longrightarrow> eval_linear_assembly \<Pi> \<Sigma>\<^sub>A = Some \<Sigma>\<^sub>A' \<Longrightarrow> 
+lemma eval_assembly_conv [simp]: "domain_distinct \<Pi> \<Longrightarrow> eval_l_assembly \<Pi> \<Sigma>\<^sub>A = Some \<Sigma>\<^sub>A' \<Longrightarrow> 
   \<Sigma>\<^sub>M \<in> state_convert \<Pi> \<Sigma>\<^sub>A \<Longrightarrow>
     \<exists>\<Sigma>\<^sub>M'. \<Sigma>\<^sub>M' \<in> state_convert \<Pi> \<Sigma>\<^sub>A' \<and> iterate (eval_machine (program_convert \<Pi>)) \<Sigma>\<^sub>M \<Sigma>\<^sub>M'"
-  proof (induction \<Pi> \<Sigma>\<^sub>A rule: eval_linear_assembly.induct)
+  proof (induction \<Pi> \<Sigma>\<^sub>A rule: eval_l_assembly.induct)
   case 1
     thus ?case by simp
   next case (2 \<Pi> \<mu> a d x \<pi>)
@@ -273,10 +273,10 @@ lemma eval_assembly_conv [simp]: "domain_distinct \<Pi> \<Longrightarrow> eval_l
       qed
   qed
 
-theorem assembly_to_machine_correct [simp]: "iterate (eval_linear_assembly \<Pi>) \<Sigma>\<^sub>A \<Sigma>\<^sub>A' \<Longrightarrow> 
+theorem assembly_to_machine_correct [simp]: "iterate (eval_l_assembly \<Pi>) \<Sigma>\<^sub>A \<Sigma>\<^sub>A' \<Longrightarrow> 
   \<Sigma>\<^sub>M \<in> state_convert \<Pi> \<Sigma>\<^sub>A \<Longrightarrow> domain_distinct \<Pi> \<Longrightarrow> 
     \<exists>\<Sigma>\<^sub>M'. \<Sigma>\<^sub>M' \<in> state_convert \<Pi> \<Sigma>\<^sub>A' \<and> iterate (eval_machine (program_convert \<Pi>)) \<Sigma>\<^sub>M \<Sigma>\<^sub>M'"
-  proof (induction "eval_linear_assembly \<Pi>" \<Sigma>\<^sub>A \<Sigma>\<^sub>A' arbitrary: \<Sigma>\<^sub>M rule: iterate.induct)
+  proof (induction "eval_l_assembly \<Pi>" \<Sigma>\<^sub>A \<Sigma>\<^sub>A' arbitrary: \<Sigma>\<^sub>M rule: iterate.induct)
   case iter_refl
     thus ?case by fastforce
   next case (iter_step \<Sigma>\<^sub>A \<Sigma>\<^sub>A' \<Sigma>\<^sub>A'')
