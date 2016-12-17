@@ -24,7 +24,7 @@ lemma iter_two: "f x = Some y \<Longrightarrow> f y = Some z \<Longrightarrow> i
 lemma iter_prestep: "iterate f y z \<Longrightarrow> f x = Some y \<Longrightarrow> iterate f x z"
   by (induction f y z rule: iterate.induct) (simp_all add: iter_one)
 
-lemma [elim]: "iterate f x y \<Longrightarrow> iterate f y z \<Longrightarrow> iterate f x z"
+lemma iter_many [elim]: "iterate f x y \<Longrightarrow> iterate f y z \<Longrightarrow> iterate f x z"
   proof (induction f x y rule: iterate.induct)
   case iter_refl
     thus ?case by simp

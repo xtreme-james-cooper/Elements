@@ -72,34 +72,53 @@ lemma finite_block_convert: "finite (dom \<Pi>) \<Longrightarrow> finite ss \<Lo
     finite (dom (block_convert ss (s, \<pi>) \<Pi>))"
   by (cases "branch_instr_convert (ss \<union> dom \<Pi>) \<pi>") auto
 
-lemma [simp]: "finite (dom \<Pi>) \<Longrightarrow> finite (dom (debranch \<Pi>))"
-  proof (induction "block_convert (dom \<Pi>)" "empty :: code_label \<Rightarrow> assembly list option" \<Pi> 
+lemma [simp]: "finite ss \<Longrightarrow> ss \<supseteq> dom \<Pi> \<Longrightarrow> 
+    finite (dom (finite_map_fold (block_convert ss) empty \<Pi>))"
+  proof (induction "block_convert ss" "empty :: code_label \<Rightarrow> assembly list option" \<Pi> 
          rule: finite_map_fold.induct)
   case 1
-    thus ?case by simp
+    thus ?case by (metis finite_subset)
   next case 2
-    thus ?case by (simp add: debranch_def)
+    thus ?case by simp
   next case (3 \<Pi>)
     let ?x = "SOME x. x \<in> dom \<Pi>"
+    let ?ih = "finite_map_fold (block_convert ss) empty (\<Pi>(?x := None))"
+    from 3 have "finite (dom ?ih)" by auto
+    with finite_block_convert 3 have "finite (dom (block_convert ss (?x, the (\<Pi> ?x)) ?ih))" by simp
+    with 3 show ?case by (simp add: Let_def)
+  qed
 
-    have "finite (dom (debranch \<Pi>))" by simp
-    thus ?case by simp
+lemma [simp]: "finite (dom \<Pi>) \<Longrightarrow> finite (dom (debranch \<Pi>))"
+  by (simp add: debranch_def)
+
+lemma [simp]: "finite ss \<Longrightarrow> ss \<supseteq> dom \<Pi> \<Longrightarrow> \<Pi> s = Some \<pi>\<^sub>B \<Longrightarrow> 
+    branch_instr_convert ss \<pi>\<^sub>B = (\<pi>\<^sub>A, \<Pi>') \<Longrightarrow> finite_map_fold (block_convert ss) empty \<Pi> s = Some \<pi>\<^sub>A"
+  proof (induction "block_convert ss" "empty :: code_label \<Rightarrow> assembly list option" \<Pi> 
+         rule: finite_map_fold.induct)
+  case 1
+    thus ?case by (metis finite_subset)
+  next case 2
+    thus ?case by (metis card_0_eq dom_eq_empty_conv option.distinct(1))
+  next case (3 \<Pi>)
+    let ?x = "SOME x. x \<in> dom \<Pi>"
+    let ?ih = "finite_map_fold (block_convert ss) empty (\<Pi>(?x := None))"
+    from 3 have "finite (dom \<Pi>)" by simp
+    from 3 have "card (dom \<Pi>) \<noteq> 0" by simp
+    from 3 have "(\<Pi>(?x := None)) s = Some \<pi>\<^sub>B \<Longrightarrow> ?ih s = Some \<pi>\<^sub>A" by auto
+    from 3 have "finite ss" by simp
+    from 3 have "dom \<Pi> \<subseteq> ss" by simp
+    from 3 have "\<Pi> s = Some \<pi>\<^sub>B" by simp
+    from 3 have "branch_instr_convert ss \<pi>\<^sub>B = (\<pi>\<^sub>A, \<Pi>')" by simp
+
+
+
+    have "block_convert ss (?x, the (\<Pi> ?x)) ?ih s = Some \<pi>\<^sub>A" by simp
+    with 3 show ?case by (simp add: Let_def)  
   qed
 
 lemma [simp]: "finite (dom \<Pi>) \<Longrightarrow> \<Pi> s = Some \<pi>\<^sub>B \<Longrightarrow> branch_instr_convert (dom \<Pi>) \<pi>\<^sub>B = (\<pi>\<^sub>A, \<Pi>') \<Longrightarrow> 
     debranch \<Pi> s = Some \<pi>\<^sub>A"
-  proof (induction "block_convert (dom \<Pi>)" "empty :: code_label \<Rightarrow> assembly list option" \<Pi> 
-         rule: finite_map_fold.induct)
-  case 1
-    thus ?case by simp
-  next case 2
-    thus ?case by simp
-  next case (3 \<Pi>)
-    let ?x = "SOME x. x \<in> dom \<Pi>"
-
-    have "debranch \<Pi> s = Some \<pi>\<^sub>A" by simp
-    thus ?case by simp
-  qed
+  by (simp add: debranch_def)
 
 lemma [simp]: "assembly_output (state_convert ss \<Sigma>\<^sub>B) = b_assembly_output \<Sigma>\<^sub>B"
   by (induction \<Sigma>\<^sub>B rule: b_assembly_output.induct) (simp split: prod.splits)
@@ -135,14 +154,29 @@ lemma [simp]: "eval_b_assembly \<Pi> \<Sigma>\<^sub>B = Some \<Sigma>\<^sub>B' \
       qed
   next case 4
     thus ?case by simp
-  next case (5 \<Pi> \<mu> a d cmp \<pi>\<^sub>t \<pi>\<^sub>f \<pi> \<omega>)
-    from 5 have "eval_b_assembly \<Pi> (\<mu>, a, d, IBAssm cmp \<pi>\<^sub>t \<pi>\<^sub>f # \<pi>, \<omega>) = Some \<Sigma>\<^sub>B'" by simp
-    from 5 have "finite (dom \<Pi>)" by simp
+  next case (5 \<Pi> \<mu> a d jmp \<pi>\<^sub>t \<pi>\<^sub>f \<pi> \<omega>)
+    show ?case
+      proof (cases "branch_instr_convert (dom \<Pi>) \<pi>\<^sub>t")
+      case (Pair \<pi>\<^sub>t' \<Pi>\<^sub>1) note PT = Pair
+        thus ?thesis
+          proof (cases "branch_instr_convert (dom \<Pi> \<union> dom \<Pi>\<^sub>1) \<pi>\<^sub>f")
+          case (Pair \<pi>\<^sub>f' \<Pi>\<^sub>2) note PF = Pair
+            thus ?thesis 
+              proof (cases "branch_instr_convert (dom \<Pi> \<union> dom \<Pi>\<^sub>1 \<union> dom \<Pi>\<^sub>2) \<pi>")
+              case (Pair \<pi>' \<Pi>\<^sub>3)
+                let ?s\<^sub>t = "new_label (dom \<Pi> \<union> dom \<Pi>\<^sub>1 \<union> dom \<Pi>\<^sub>2 \<union> dom \<Pi>\<^sub>3)"
+                let ?s\<^sub>e = "new_label (dom \<Pi> \<union> dom \<Pi>\<^sub>1 \<union> dom \<Pi>\<^sub>2 \<union> dom \<Pi>\<^sub>3 \<union> {?s\<^sub>t})"
 
-
-
-    have "iterate (eval_assembly (debranch \<Pi>)) (state_convert (dom \<Pi>) (\<mu>, a, d, IBAssm cmp \<pi>\<^sub>t \<pi>\<^sub>f # \<pi>, \<omega>)) (state_convert (dom \<Pi>) \<Sigma>\<^sub>B')" by simp
-    thus ?case by simp
+                from 5 have "finite (dom \<Pi>)" by simp
+                                
+                have "state_convert (dom \<Pi>) (\<mu>, a, d, IBAssm jmp \<pi>\<^sub>t \<pi>\<^sub>f # \<pi>, \<omega>) = xxx" by simp
+                
+            
+                have "iterate (eval_assembly (debranch \<Pi>)) (\<mu>, a, d, JAssm jmp ?s\<^sub>t # \<pi>\<^sub>f' @ [JAssm {EQ, LT, GT} ?s\<^sub>e], \<omega>) (state_convert (dom \<Pi>) (\<mu>, a, d, (if should_jump d jmp then \<pi>\<^sub>t else \<pi>\<^sub>f) @ \<pi>, \<omega>))" by simp
+                with PT PF Pair 5 show ?thesis by (simp add: Let_def)
+              qed
+          qed
+      qed
   next case (6 \<Pi> \<mu> a d s \<pi> \<omega>)
     thus ?case
       proof (cases "\<Pi> s")

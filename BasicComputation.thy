@@ -15,6 +15,12 @@ definition boolify :: "int \<Rightarrow> bool" where
 definition unboolify :: "bool \<Rightarrow> int" where
   "unboolify b = (if b then 1 else 0)"
 
+lemma [simp]: "unboolify True = 1"
+  by (simp add: unboolify_def)
+
+lemma [simp]: "unboolify False = 0"
+  by (simp add: unboolify_def)
+
 lemma [simp]: "unboolify (boolify i2 \<and> boolify i1) = unboolify (boolify i1 \<and> boolify i2)"
   by (simp add: boolify_def unboolify_def)
 
