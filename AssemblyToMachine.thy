@@ -220,6 +220,9 @@ lemma [simp]: "\<Sigma> \<in> state_convert \<Pi> (\<mu>, a, d, \<pi>, \<omega>)
     \<exists>aa pc. \<Sigma> = (\<mu>, aa, d, pc, \<omega>) \<and> pc \<in> get_pc \<Pi> \<pi>"
   by (cases a) auto
 
+lemma [simp]: "\<Sigma>\<^sub>M \<in> state_convert \<Pi> \<Sigma>\<^sub>A \<Longrightarrow> machine_output \<Sigma>\<^sub>M = assembly_output \<Sigma>\<^sub>A"
+  by (induction \<Pi> \<Sigma>\<^sub>A rule: state_convert.induct) (induction \<Sigma>\<^sub>M rule: machine_output.induct, simp)+
+
 lemma eval_assembly_conv [simp]: "domain_distinct \<Pi> \<Longrightarrow> eval_l_assembly \<Pi> \<Sigma>\<^sub>A = Some \<Sigma>\<^sub>A' \<Longrightarrow> 
   \<Sigma>\<^sub>M \<in> state_convert \<Pi> \<Sigma>\<^sub>A \<Longrightarrow>
     \<exists>\<Sigma>\<^sub>M'. \<Sigma>\<^sub>M' \<in> state_convert \<Pi> \<Sigma>\<^sub>A' \<and> iterate (eval_machine (program_convert \<Pi>)) \<Sigma>\<^sub>M \<Sigma>\<^sub>M'"

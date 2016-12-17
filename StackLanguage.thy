@@ -23,4 +23,7 @@ fun eval_stack :: "stack_program \<Rightarrow> stack_state \<Rightarrow> stack_s
 | "eval_stack \<Pi> (i1 # \<sigma>, Print # \<pi>, \<omega>) = Some (\<sigma>, \<pi>, i1 # \<omega>)"
 | "eval_stack \<Pi> \<Sigma> = None"
 
+fun stack_output :: "stack_state \<Rightarrow> output" where
+  "stack_output (\<sigma>, \<pi>, \<omega>) = \<omega>"
+
 end

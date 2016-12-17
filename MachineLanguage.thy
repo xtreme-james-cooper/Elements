@@ -28,4 +28,7 @@ fun eval_machine :: "machine_program \<Rightarrow> machine_state \<Rightarrow> m
     then Some (eval_instruction (\<Pi> ! pc) (\<mu>, a, d, pc, \<omega>)) 
     else None)"
 
+fun machine_output :: "machine_state \<Rightarrow> output" where
+  "machine_output (\<mu>, a, d, pc, \<omega>) = \<omega>"
+
 end

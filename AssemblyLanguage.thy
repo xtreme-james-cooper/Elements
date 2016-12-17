@@ -33,4 +33,7 @@ fun eval_assembly :: "assembly_program \<Rightarrow> assembly_state \<Rightarrow
     else Some (\<mu>, None, d, \<pi>, \<omega>))"
 | "eval_assembly \<Pi> (\<mu>, a, d, PAssm # \<pi>, \<omega>) = Some (\<mu>, a, d, \<pi>, d # \<omega>)"
 
+fun assembly_output :: "assembly_state \<Rightarrow> output" where
+  "assembly_output (\<mu>, a, d, \<pi>, \<omega>) = \<omega>"
+
 end

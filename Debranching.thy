@@ -101,6 +101,9 @@ lemma [simp]: "finite (dom \<Pi>) \<Longrightarrow> \<Pi> s = Some \<pi>\<^sub>B
     thus ?case by simp
   qed
 
+lemma [simp]: "assembly_output (state_convert ss \<Sigma>\<^sub>B) = b_assembly_output \<Sigma>\<^sub>B"
+  by (induction \<Sigma>\<^sub>B rule: b_assembly_output.induct) (simp split: prod.splits)
+
 lemma [simp]: "eval_b_assembly \<Pi> \<Sigma>\<^sub>B = Some \<Sigma>\<^sub>B' \<Longrightarrow> finite (dom \<Pi>) \<Longrightarrow>
     iterate (eval_assembly (debranch \<Pi>)) (state_convert (dom \<Pi>) \<Sigma>\<^sub>B) (state_convert (dom \<Pi>) \<Sigma>\<^sub>B')"
   proof (induction \<Pi> \<Sigma>\<^sub>B rule: eval_b_assembly.induct)

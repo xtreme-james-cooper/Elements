@@ -34,4 +34,7 @@ fun eval_b_assembly :: "b_assembly_program \<Rightarrow> b_assembly_state \<Righ
     | None \<Rightarrow> None)"
 | "eval_b_assembly \<Pi> (\<mu>, a, d, PBAssm # \<pi>, \<omega>) = Some (\<mu>, a, d, \<pi>, d # \<omega>)"
 
+fun b_assembly_output :: "b_assembly_state \<Rightarrow> output" where
+  "b_assembly_output (\<mu>, a, d, \<pi>, \<omega>) = \<omega>"
+
 end

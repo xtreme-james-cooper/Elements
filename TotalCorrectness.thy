@@ -13,6 +13,16 @@ definition program_convert :: "stack_program \<Rightarrow> machine_program" wher
   "program_convert \<Pi> =
     AssemblyToMachine.program_convert (linearize (debranch (StackToAssembly.program_convert \<Pi>)))"
 
+theorem state_equivalence: "\<Sigma>\<^sub>M \<in> state_convert \<Pi> \<Sigma>\<^sub>S \<Longrightarrow> machine_output \<Sigma>\<^sub>M = stack_output \<Sigma>\<^sub>S"
+  proof -
+    let ?\<Pi>\<^sub>B = "StackToAssembly.program_convert \<Pi>"
+    let ?\<Pi>\<^sub>A = "linearize (debranch ?\<Pi>\<^sub>B)"
+    assume "\<Sigma>\<^sub>M \<in> state_convert \<Pi> \<Sigma>\<^sub>S"
+    with state_convert_def obtain \<Sigma>\<^sub>B where B: "\<Sigma>\<^sub>B \<in> StackToAssembly.state_convert \<Sigma>\<^sub>S \<and> 
+        \<Sigma>\<^sub>M \<in> AssemblyToMachine.state_convert ?\<Pi>\<^sub>A (Debranching.state_convert (dom ?\<Pi>\<^sub>B) \<Sigma>\<^sub>B)" by blast
+    thus ?thesis by auto
+  qed
+
 theorem total_correctness: "finite (dom \<Pi>) \<Longrightarrow> iterate (eval_stack \<Pi>) \<Sigma>\<^sub>S \<Sigma>\<^sub>S' \<Longrightarrow> 
   \<Sigma>\<^sub>M \<in> state_convert \<Pi> \<Sigma>\<^sub>S \<Longrightarrow> 
     \<exists>\<Sigma>\<^sub>M'. \<Sigma>\<^sub>M' \<in> state_convert \<Pi> \<Sigma>\<^sub>S' \<and> iterate (eval_machine (program_convert \<Pi>)) \<Sigma>\<^sub>M \<Sigma>\<^sub>M'"
