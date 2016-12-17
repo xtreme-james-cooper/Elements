@@ -20,6 +20,9 @@ fun branch_instr_convert :: "code_label set \<Rightarrow> b_assembly list \<Righ
     in (JAssm jmp s\<^sub>t # \<pi>\<^sub>f' @ [JAssm {EQ, LT, GT} s\<^sub>e], 
         \<Pi>\<^sub>1 ++ \<Pi>\<^sub>2 ++ \<Pi>\<^sub>3 ++ [s\<^sub>t \<mapsto> \<pi>\<^sub>t' @ [JAssm {EQ, LT, GT} s\<^sub>e], s\<^sub>e \<mapsto> \<pi>']))"
 | "branch_instr_convert ss (JBAssm s # \<pi>) = ([JAssm {EQ, LT, GT} s], empty)"
+| "branch_instr_convert ss (PBAssm # \<pi>) = (
+    let (\<pi>', \<Pi>) = branch_instr_convert ss \<pi>
+    in (PAssm # \<pi>', \<Pi>))"
 
 primrec block_convert :: "code_label set \<Rightarrow> code_label \<times> b_assembly list \<Rightarrow> assembly_program \<Rightarrow> 
     assembly_program" where
@@ -29,7 +32,7 @@ definition debranch :: "b_assembly_program \<Rightarrow> assembly_program" where
   "debranch \<Pi> = finite_map_fold (block_convert (dom \<Pi>)) empty \<Pi>"
 
 fun state_convert :: "code_label set \<Rightarrow> b_assembly_state \<Rightarrow> assembly_state" where
-  "state_convert ss (\<mu>, a, d, \<pi>) = (let (\<pi>', _) = branch_instr_convert ss \<pi> in (\<mu>, a, d, \<pi>'))"
+  "state_convert ss (\<mu>, a, d, \<pi>, \<omega>) = (let (\<pi>', _) = branch_instr_convert ss \<pi> in (\<mu>, a, d, \<pi>', \<omega>))"
 
 (* conversion correctness *)
 
@@ -39,7 +42,7 @@ lemma [simp]: "branch_instr_convert ss \<pi>\<^sub>B = (\<pi>\<^sub>A, \<Pi>) \<
     thus ?case by auto
   next case 2
     thus ?case by (simp split: prod.splits)
-  next case (3 ss dst cmp \<pi>\<^sub>B)
+  next case 3
     thus ?case by (simp split: prod.splits)
   next case (4 ss jmp \<pi>\<^sub>B\<^sub>t \<pi>\<^sub>B\<^sub>f \<pi>\<^sub>B)
     thus ?case
@@ -61,6 +64,8 @@ lemma [simp]: "branch_instr_convert ss \<pi>\<^sub>B = (\<pi>\<^sub>A, \<Pi>) \<
       qed
   next case 5
     thus ?case by auto
+  next case 6
+    thus ?case by (simp split: prod.splits)
   qed
 
 lemma finite_block_convert: "finite (dom \<Pi>) \<Longrightarrow> finite ss \<Longrightarrow> 
@@ -93,7 +98,7 @@ lemma [simp]: "finite (dom \<Pi>) \<Longrightarrow> \<Pi> s = Some \<pi>\<^sub>B
     let ?x = "SOME x. x \<in> dom \<Pi>"
 
     have "debranch \<Pi> s = Some \<pi>\<^sub>A" by simp
-    show ?case by simp
+    thus ?case by simp
   qed
 
 lemma [simp]: "eval_b_assembly \<Pi> \<Sigma>\<^sub>B = Some \<Sigma>\<^sub>B' \<Longrightarrow> finite (dom \<Pi>) \<Longrightarrow>
@@ -101,15 +106,16 @@ lemma [simp]: "eval_b_assembly \<Pi> \<Sigma>\<^sub>B = Some \<Sigma>\<^sub>B' \
   proof (induction \<Pi> \<Sigma>\<^sub>B rule: eval_b_assembly.induct)
   case 1
     thus ?case by simp
-  next case (2 \<Pi> \<mu> a d x \<pi>)
+  next case (2 \<Pi> \<mu> a d x \<pi> \<omega>)
     thus ?case
       proof (cases "branch_instr_convert (dom \<Pi>) \<pi>")
       case (Pair \<pi>' \<Pi>')
-        hence S: "state_convert (dom \<Pi>) (\<mu>, a, d, ABAssm x # \<pi>) = (\<mu>, a, d, AAssm x # \<pi>')" by simp
-        from Pair have "state_convert (dom \<Pi>) (\<mu>, Some x, d, \<pi>) = (\<mu>, Some x, d, \<pi>')" by simp
+        hence S: "state_convert (dom \<Pi>) (\<mu>, a, d, ABAssm x # \<pi>, \<omega>) = 
+          (\<mu>, a, d, AAssm x # \<pi>', \<omega>)" by simp
+        from Pair have "state_convert (dom \<Pi>) (\<mu>, Some x, d, \<pi>, \<omega>) = (\<mu>, Some x, d, \<pi>', \<omega>)" by simp
         with 2 S show ?thesis by (simp add: iter_one)
       qed
-  next case (3 \<Pi> \<mu> a d dst cmp \<pi>)
+  next case (3 \<Pi> \<mu> a d dst cmp \<pi> \<omega>)
     let ?n = "compute cmp (\<mu> a) a d"
     let ?\<mu> = "if M \<in> dst then \<mu>(a := ?n) else \<mu>"
     let ?a = "Some (if A \<in> dst then ?n else a)"
@@ -117,39 +123,48 @@ lemma [simp]: "eval_b_assembly \<Pi> \<Sigma>\<^sub>B = Some \<Sigma>\<^sub>B' \
     show ?case
       proof (cases "branch_instr_convert (dom \<Pi>) \<pi>")
       case (Pair \<pi>' \<Pi>')
-        hence S: "state_convert (dom \<Pi>) (?\<mu>, ?a, ?d, \<pi>) = (?\<mu>, ?a, ?d, \<pi>')" by simp
-        from Pair have S': "state_convert (dom \<Pi>) (\<mu>, Some a, d, CBAssm dst cmp # \<pi>) = 
-          (\<mu>, Some a, d, CAssm dst cmp # \<pi>')" by simp
-        have "iterate (eval_assembly (debranch \<Pi>)) (\<mu>, Some a, d, CAssm dst cmp # \<pi>') 
-          (?\<mu>, ?a, ?d, \<pi>')" by (meson iter_one eval_assembly.simps(3))
+        hence S: "state_convert (dom \<Pi>) (?\<mu>, ?a, ?d, \<pi>, \<omega>) = (?\<mu>, ?a, ?d, \<pi>', \<omega>)" by simp
+        from Pair have S': "state_convert (dom \<Pi>) (\<mu>, Some a, d, CBAssm dst cmp # \<pi>, \<omega>) = 
+          (\<mu>, Some a, d, CAssm dst cmp # \<pi>', \<omega>)" by simp
+        have "iterate (eval_assembly (debranch \<Pi>)) (\<mu>, Some a, d, CAssm dst cmp # \<pi>', \<omega>) 
+          (?\<mu>, ?a, ?d, \<pi>', \<omega>)" by (meson iter_one eval_assembly.simps(3))
         with 3 S S' show ?thesis by (simp add: Let_def)
       qed
   next case 4
     thus ?case by simp
-  next case (5 \<Pi> \<mu> a d cmp \<pi>\<^sub>t \<pi>\<^sub>f \<pi>)
-    from 5 have "eval_b_assembly \<Pi> (\<mu>, a, d, IBAssm cmp \<pi>\<^sub>t \<pi>\<^sub>f # \<pi>) = Some \<Sigma>\<^sub>B'" by simp
+  next case (5 \<Pi> \<mu> a d cmp \<pi>\<^sub>t \<pi>\<^sub>f \<pi> \<omega>)
+    from 5 have "eval_b_assembly \<Pi> (\<mu>, a, d, IBAssm cmp \<pi>\<^sub>t \<pi>\<^sub>f # \<pi>, \<omega>) = Some \<Sigma>\<^sub>B'" by simp
     from 5 have "finite (dom \<Pi>)" by simp
 
 
 
-    have "iterate (eval_assembly (debranch \<Pi>)) (state_convert (dom \<Pi>) (\<mu>, a, d, IBAssm cmp \<pi>\<^sub>t \<pi>\<^sub>f # \<pi>)) (state_convert (dom \<Pi>) \<Sigma>\<^sub>B')" by simp
+    have "iterate (eval_assembly (debranch \<Pi>)) (state_convert (dom \<Pi>) (\<mu>, a, d, IBAssm cmp \<pi>\<^sub>t \<pi>\<^sub>f # \<pi>, \<omega>)) (state_convert (dom \<Pi>) \<Sigma>\<^sub>B')" by simp
     thus ?case by simp
-  next case (6 \<Pi> \<mu> a d s \<pi>)
+  next case (6 \<Pi> \<mu> a d s \<pi> \<omega>)
     thus ?case
       proof (cases "\<Pi> s")
       case (Some \<pi>\<^sub>2)
         thus ?thesis
           proof (cases "branch_instr_convert (dom \<Pi>) \<pi>\<^sub>2")
           case (Pair \<pi>\<^sub>2' \<Pi>')
-            hence S: "state_convert (dom \<Pi>) (\<mu>, None, d, \<pi>\<^sub>2) = (\<mu>, None, d, \<pi>\<^sub>2')" by simp
-            from Some Pair 6 have "eval_assembly (debranch \<Pi>) (\<mu>, a, d, JAssm {EQ, LT, GT} s # []) = 
-              Some (\<mu>, None, d, \<pi>\<^sub>2')" by auto
-            hence "iterate (eval_assembly (debranch \<Pi>)) (\<mu>, a, d, [JAssm {EQ, LT, GT} s]) 
-              (\<mu>, None, d, \<pi>\<^sub>2')" by (metis iter_one)
+            hence S: "state_convert (dom \<Pi>) (\<mu>, None, d, \<pi>\<^sub>2, \<omega>) = (\<mu>, None, d, \<pi>\<^sub>2', \<omega>)" by simp
+            from Some Pair 6 have "eval_assembly (debranch \<Pi>) (\<mu>, a, d, [JAssm {EQ, LT, GT} s], \<omega>) = 
+              Some (\<mu>, None, d, \<pi>\<^sub>2', \<omega>)" by auto
+            hence "iterate (eval_assembly (debranch \<Pi>)) (\<mu>, a, d, [JAssm {EQ, LT, GT} s], \<omega>) 
+              (\<mu>, None, d, \<pi>\<^sub>2', \<omega>)" by (metis iter_one)
             with 6 Some S show ?thesis by simp
           qed
       next case None
         with 6 show ?thesis by simp
+      qed
+  next case (7 \<Pi> \<mu> a d \<pi> \<omega>)
+    thus ?case
+      proof (cases "branch_instr_convert (dom \<Pi>) \<pi>")
+      case (Pair \<pi>' \<Pi>')
+        hence S: "state_convert (dom \<Pi>) (\<mu>, a, d, PBAssm # \<pi>, \<omega>) = (\<mu>, a, d, PAssm # \<pi>', \<omega>)" 
+          by simp
+        from Pair have "state_convert (dom \<Pi>) (\<mu>, a, d, \<pi>, d # \<omega>) = (\<mu>, a, d, \<pi>', d # \<omega>)" by simp
+        with 7 S show ?thesis by (simp add: iter_one)
       qed
   qed 
 

@@ -7,6 +7,8 @@ typedecl code_label
 axiomatization new_label :: "code_label set \<Rightarrow> code_label" where
   new_fresh [simp]: "finite ss \<Longrightarrow> new_label ss \<notin> ss"
 
+type_synonym "output" = "int list"
+
 definition boolify :: "int \<Rightarrow> bool" where
   "boolify i = (i = 0)"
 

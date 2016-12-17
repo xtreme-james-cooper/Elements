@@ -6,6 +6,7 @@ primrec machine_length :: "assembly \<Rightarrow> nat" where
   "machine_length (AAssm x) = 1"
 | "machine_length (CAssm dst cmp) = 1"
 | "machine_length (JAssm jmp s) = 2"
+| "machine_length PAssm = 1"
 
 primrec converted_length :: "assembly list \<Rightarrow> nat" where
   "converted_length [] = 0"
@@ -24,6 +25,7 @@ primrec instruction_conv :: "(code_label \<rightharpoonup> nat) \<Rightarrow> as
   "instruction_conv \<rho> (AAssm x) = [AInstr x]"
 | "instruction_conv \<rho> (CAssm dst cmp) = [CInstr dst cmp {}]"
 | "instruction_conv \<rho> (JAssm jmp s) = [AInstr (get_block_addr \<rho> s), CInstr {} (Reg D) jmp]"
+| "instruction_conv \<rho> PAssm = [PInstr]"
 
 definition get_assembly :: "l_assembly_program \<Rightarrow> assembly list" where
   "get_assembly \<Pi> = concat (map snd \<Pi>)"
@@ -36,8 +38,8 @@ definition get_pc :: "l_assembly_program \<Rightarrow> assembly list \<Rightarro
     { the (build_symbol_table \<Pi> s) + converted_length \<pi>' | s \<pi>'. lookup \<Pi> s = Some (\<pi>' @ \<pi>) }"
 
 fun state_convert :: "l_assembly_program \<Rightarrow> assembly_state \<Rightarrow> machine_state set" where
-  "state_convert \<Pi> (\<mu>, Some a, d, \<pi>) = {(\<mu>, a, d, pc) | pc. pc \<in> get_pc \<Pi> \<pi>}"
-| "state_convert \<Pi> (\<mu>, None, d, \<pi>) = {(\<mu>, a, d, pc) | a pc. pc \<in> get_pc \<Pi> \<pi>}"
+  "state_convert \<Pi> (\<mu>, Some a, d, \<pi>, \<omega>) = {(\<mu>, a, d, pc, \<omega>) | pc. pc \<in> get_pc \<Pi> \<pi>}"
+| "state_convert \<Pi> (\<mu>, None, d, \<pi>, \<omega>) = {(\<mu>, a, d, pc, \<omega>) | a pc. pc \<in> get_pc \<Pi> \<pi>}"
 
 (* conversion correctness *)
 
@@ -207,9 +209,15 @@ lemma next_pc: "pc \<in> get_pc \<Pi> (\<iota> # \<pi>) \<Longrightarrow> machin
     with P have "Suc (Suc pc) = 
       the (build_symbol_table \<Pi> s') + converted_length (\<pi>' @ [JAssm jmp s])" by simp
     with P get_pc_def show ?case by fastforce
+  next case PAssm
+    then obtain s \<pi>' where P: "pc = the (build_symbol_table \<Pi> s) + converted_length \<pi>' \<and> 
+      lookup \<Pi> s = Some (\<pi>' @ PAssm # \<pi>)" by (auto simp add: get_pc_def)
+    with P have "Suc pc = the (build_symbol_table \<Pi> s) + converted_length (\<pi>' @ [PAssm])" by simp
+    with P get_pc_def show ?case by fastforce
   qed
 
-lemma [simp]: "\<Sigma> \<in> state_convert \<Pi> (\<mu>, a, d, \<pi>) \<Longrightarrow> \<exists>aa pc. \<Sigma> = (\<mu>, aa, d, pc) \<and> pc \<in> get_pc \<Pi> \<pi>"
+lemma [simp]: "\<Sigma> \<in> state_convert \<Pi> (\<mu>, a, d, \<pi>, \<omega>) \<Longrightarrow> 
+    \<exists>aa pc. \<Sigma> = (\<mu>, aa, d, pc, \<omega>) \<and> pc \<in> get_pc \<Pi> \<pi>"
   by (cases a) auto
 
 lemma eval_assembly_conv [simp]: "domain_distinct \<Pi> \<Longrightarrow> eval_l_assembly \<Pi> \<Sigma>\<^sub>A = Some \<Sigma>\<^sub>A' \<Longrightarrow> 
@@ -218,58 +226,85 @@ lemma eval_assembly_conv [simp]: "domain_distinct \<Pi> \<Longrightarrow> eval_l
   proof (induction \<Pi> \<Sigma>\<^sub>A rule: eval_l_assembly.induct)
   case 1
     thus ?case by simp
-  next case (2 \<Pi> \<mu> a d x \<pi>)
-    from 2 have S: "\<Sigma>\<^sub>A' = (\<mu>, Some x, d, \<pi>)" by simp
-    from 2 obtain pc aa where P: "\<Sigma>\<^sub>M = (\<mu>, aa, d, pc) \<and> pc \<in> get_pc \<Pi> (AAssm x # \<pi>)" by fastforce
-    with next_pc have X: "(\<mu>, x, d, Suc pc) \<in> state_convert \<Pi> (\<mu>, Some x, d, \<pi>)" by fastforce
-    from 2 P lookup_convert have "eval_machine (program_convert \<Pi>) (\<mu>, aa, d, pc) = 
-      Some (\<mu>, x, d, Suc pc)" by fastforce
+  next case (2 \<Pi> \<mu> a d x \<pi> \<omega>)
+    from 2 have S: "\<Sigma>\<^sub>A' = (\<mu>, Some x, d, \<pi>, \<omega>)" by simp
+    from 2 obtain pc aa where P: "\<Sigma>\<^sub>M = (\<mu>, aa, d, pc, \<omega>) \<and> pc \<in> get_pc \<Pi> (AAssm x # \<pi>)" 
+      by fastforce
+    with next_pc have X: "(\<mu>, x, d, Suc pc, \<omega>) \<in> state_convert \<Pi> (\<mu>, Some x, d, \<pi>, \<omega>)" by fastforce
+    from 2 P lookup_convert have "eval_machine (program_convert \<Pi>) (\<mu>, aa, d, pc, \<omega>) = 
+      Some (\<mu>, x, d, Suc pc, \<omega>)" by fastforce
     with X S P iter_one show ?case by fast
-  next case (3 \<Pi> \<mu> a d dst cmp \<pi>)
+  next case (3 \<Pi> \<mu> a d dst cmp \<pi> \<omega>)
     let ?n = "compute cmp (\<mu> a) a d"
     let ?\<mu> = "if M \<in> dst then \<mu>(a := ?n) else \<mu>"
     let ?a = "if A \<in> dst then ?n else a"
     let ?d = "if D \<in> dst then ?n else d"
-    from 3 have S: "\<Sigma>\<^sub>A' = (?\<mu>, Some ?a, ?d, \<pi>)" by (simp add: Let_def)
-    from 3 obtain pc where P: "\<Sigma>\<^sub>M = (\<mu>, a, d, pc) \<and> pc \<in> get_pc \<Pi> (CAssm dst cmp # \<pi>)" by fastforce
-    with next_pc have X: "(?\<mu>, ?a, ?d, Suc pc) \<in> state_convert \<Pi> (?\<mu>, Some ?a, ?d, \<pi>)" by fastforce
-    have "eval_instruction (CInstr dst cmp {}) (\<mu>, a, d, pc) = (?\<mu>, ?a, ?d, Suc pc)" 
+    from 3 have S: "\<Sigma>\<^sub>A' = (?\<mu>, Some ?a, ?d, \<pi>, \<omega>)" by (simp add: Let_def)
+    from 3 obtain pc where P: "\<Sigma>\<^sub>M = (\<mu>, a, d, pc, \<omega>) \<and> pc \<in> get_pc \<Pi> (CAssm dst cmp # \<pi>)" 
+      by fastforce
+    with next_pc have X: "(?\<mu>, ?a, ?d, Suc pc, \<omega>) \<in> state_convert \<Pi> (?\<mu>, Some ?a, ?d, \<pi>, \<omega>)" 
+      by fastforce
+    have "eval_instruction (CInstr dst cmp {}) (\<mu>, a, d, pc, \<omega>) = (?\<mu>, ?a, ?d, Suc pc, \<omega>)" 
       by (simp add: Let_def)
-    with 3 P lookup_convert have "eval_machine (program_convert \<Pi>) (\<mu>, a, d, pc) = 
-      Some (?\<mu>, ?a, ?d, Suc pc)" by fastforce
+    with 3 P lookup_convert have "eval_machine (program_convert \<Pi>) (\<mu>, a, d, pc, \<omega>) = 
+      Some (?\<mu>, ?a, ?d, Suc pc, \<omega>)" by fastforce
     with X S P iter_one show ?case by fast
   next case 4
     thus ?case by simp
-  next case (5 \<Pi> \<mu> a d jmp s \<pi>)
-    then obtain pc aa where P: "\<Sigma>\<^sub>M = (\<mu>, aa, d, pc) \<and> pc \<in> get_pc \<Pi> (JAssm jmp s # \<pi>)" by fastforce
+  next case (5 \<Pi> \<mu> a d jmp s \<pi> \<omega>)
+    then obtain pc aa where P: "\<Sigma>\<^sub>M = (\<mu>, aa, d, pc, \<omega>) \<and> pc \<in> get_pc \<Pi> (JAssm jmp s # \<pi>)" 
+      by fastforce
     let ?s = "get_block_addr (build_symbol_table \<Pi>) s"
-    from 5 P lookup_convert have first_step: "eval_machine (program_convert \<Pi>) (\<mu>, aa, d, pc) = 
-      Some (\<mu>, ?s, d, Suc pc)" by fastforce
+    from 5 P lookup_convert have first_step: "eval_machine (program_convert \<Pi>) (\<mu>, aa, d, pc, \<omega>) = 
+      Some (\<mu>, ?s, d, Suc pc, \<omega>)" by fastforce
     show ?case
       proof (cases "should_jump d jmp")
       case True
         thus ?thesis
           proof (cases "lookup \<Pi> s")
           case (Some \<pi>')
-            with 5 True have S: "\<Sigma>\<^sub>A' = (\<mu>, None, d, \<pi>')" by simp
-            from Some have X: "(\<mu>, ?s, d, nat ?s) \<in> state_convert \<Pi> (\<mu>, None, d, \<pi>')" by simp
+            with 5 True have S: "\<Sigma>\<^sub>A' = (\<mu>, None, d, \<pi>', \<omega>)" by simp
+            from Some have X: "(\<mu>, ?s, d, nat ?s, \<omega>) \<in> state_convert \<Pi> (\<mu>, None, d, \<pi>', \<omega>)" by simp
             have "1 < machine_length (JAssm jmp s)" by simp
-            with 5 P lookup_convert True have "eval_machine (program_convert \<Pi>) (\<mu>, ?s, d, Suc pc) = 
-              Some (\<mu>, ?s, d, nat ?s)" by fastforce
+            with 5 P lookup_convert True have 
+              "eval_machine (program_convert \<Pi>) (\<mu>, ?s, d, Suc pc, \<omega>) = 
+                Some (\<mu>, ?s, d, nat ?s, \<omega>)" by fastforce
             with first_step X P S iter_two show ?thesis by fast
           next case None
             with 5 True show ?thesis by simp
           qed
       next case False
-        from 5 False have S: "\<Sigma>\<^sub>A' = (\<mu>, None, d, \<pi>)" by auto
-        from P next_pc have X: "(\<mu>, ?s, d, Suc (Suc pc)) \<in> state_convert \<Pi> (\<mu>, None, d, \<pi>)" 
+        from 5 False have S: "\<Sigma>\<^sub>A' = (\<mu>, None, d, \<pi>, \<omega>)" by auto
+        from P next_pc have X: "(\<mu>, ?s, d, Suc (Suc pc), \<omega>) \<in> state_convert \<Pi> (\<mu>, None, d, \<pi>, \<omega>)" 
           by fastforce
-        from False have Y: "eval_instruction (CInstr {} (Reg D) jmp) (\<mu>, ?s, d, Suc pc) = 
-          (\<mu>, ?s, d, Suc (Suc pc))" by auto
+        from False have Y: "eval_instruction (CInstr {} (Reg D) jmp) (\<mu>, ?s, d, Suc pc, \<omega>) = 
+          (\<mu>, ?s, d, Suc (Suc pc), \<omega>)" by auto
         have "1 < machine_length (JAssm jmp s)" by simp
-        with 5 P Y lookup_convert have "eval_machine (program_convert \<Pi>) (\<mu>, ?s, d, Suc pc) =
-          Some (\<mu>, ?s, d, Suc (Suc pc))" by fastforce
+        with 5 P Y lookup_convert have "eval_machine (program_convert \<Pi>) (\<mu>, ?s, d, Suc pc, \<omega>) =
+          Some (\<mu>, ?s, d, Suc (Suc pc), \<omega>)" by fastforce
         with first_step X P S iter_two show ?thesis by fast
+      qed
+  next case (6 \<Pi> \<mu> a d \<pi> \<omega>)
+    thus ?case
+      proof (cases a)
+      case (Some aa)
+        from 6 Some have S: "\<Sigma>\<^sub>A' = (\<mu>, Some aa, d, \<pi>, d # \<omega>)" by simp
+        from 6 Some obtain pc where P: "\<Sigma>\<^sub>M = (\<mu>, aa, d, pc, \<omega>) \<and> pc \<in> get_pc \<Pi> (PAssm # \<pi>)" 
+          by fastforce
+        with next_pc have X: "(\<mu>, aa, d, Suc pc, d # \<omega>) \<in> state_convert \<Pi> (\<mu>, Some aa, d, \<pi>, d # \<omega>)" 
+          by fastforce
+        from 6 P lookup_convert have "eval_machine (program_convert \<Pi>) (\<mu>, aa, d, pc, \<omega>) = 
+          Some (\<mu>, aa, d, Suc pc, d # \<omega>)" by fastforce
+        with X S P iter_one show ?thesis by fast
+      next case None
+        from 6 None have S: "\<Sigma>\<^sub>A' = (\<mu>, None, d, \<pi>, d # \<omega>)" by simp
+        from 6 obtain pc aa where P: "\<Sigma>\<^sub>M = (\<mu>, aa, d, pc, \<omega>) \<and> pc \<in> get_pc \<Pi> (PAssm # \<pi>)" 
+          by fastforce
+        with next_pc have X: "(\<mu>, aa, d, Suc pc, d # \<omega>) \<in> state_convert \<Pi> (\<mu>, None, d, \<pi>, d # \<omega>)" 
+          by fastforce
+        from 6 P lookup_convert have "eval_machine (program_convert \<Pi>) (\<mu>, aa, d, pc, \<omega>) = 
+          Some (\<mu>, aa, d, Suc pc, d # \<omega>)" by fastforce
+        with X S P iter_one show ?thesis by fast
       qed
   qed
 
