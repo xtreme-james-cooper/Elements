@@ -1,5 +1,5 @@
 theory Linearization
-imports LinearAssemblyLanguage Iterate
+imports "../LinearAssembly/LinearAssemblyLanguage" "../Utilities/Iterate"
 begin
 
 fun state_convert :: "assembly_state \<Rightarrow> l_assembly_state" where

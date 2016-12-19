@@ -1,5 +1,9 @@
 theory TotalCorrectness
-imports AssemblyToMachine Linearization Debranching StackToAssembly
+imports 
+  "LinearAssembly/AssemblyToMachine" 
+  "Assembly/Linearization" 
+  "BranchingAssembly/Debranching" 
+  "Stack/StackToAssembly"
 begin
 
 definition state_convert :: "stack_program \<Rightarrow> stack_state \<Rightarrow> machine_state set" where

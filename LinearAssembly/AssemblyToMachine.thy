@@ -1,5 +1,5 @@
 theory AssemblyToMachine
-imports LinearAssemblyLanguage MachineLanguage Iterate
+imports LinearAssemblyLanguage "../Machine/MachineLanguage" "../Utilities/Iterate"
 begin
 
 primrec machine_length :: "assembly \<Rightarrow> nat" where

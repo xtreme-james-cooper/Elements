@@ -1,5 +1,5 @@
 theory LinearAssemblyLanguage
-imports AssemblyLanguage FiniteMap
+imports "../Assembly/AssemblyLanguage" "../Utilities/FiniteMap"
 begin
 
 type_synonym l_assembly_state = "memory \<times> int option \<times> int \<times> assembly list \<times> output" 

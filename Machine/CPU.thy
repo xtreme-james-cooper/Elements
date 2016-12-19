@@ -1,5 +1,5 @@
 theory CPU
-imports BasicComputation
+imports "../Utilities/BasicComputation"
 begin
 
 type_synonym memory = "int \<Rightarrow> int"

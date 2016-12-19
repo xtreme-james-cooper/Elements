@@ -1,5 +1,5 @@
 theory BranchingAssemblyLanguage
-imports CPU
+imports "../Machine/CPU"
 begin
 
 datatype b_assembly =

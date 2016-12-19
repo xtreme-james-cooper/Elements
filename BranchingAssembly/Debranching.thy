@@ -1,5 +1,9 @@
 theory Debranching
-imports BranchingAssemblyLanguage AssemblyLanguage Iterate FiniteMap
+imports 
+  BranchingAssemblyLanguage 
+  "../Assembly/AssemblyLanguage" 
+  "../Utilities/Iterate" 
+  "../Utilities/FiniteMap"
 begin
 
 fun branch_instr_convert :: "code_label set \<Rightarrow> b_assembly list \<Rightarrow> code_label \<Rightarrow> 

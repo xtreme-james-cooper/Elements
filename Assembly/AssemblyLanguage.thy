@@ -1,5 +1,5 @@
 theory AssemblyLanguage
-imports CPU
+imports "../Machine/CPU"
 begin
 
 datatype assembly =

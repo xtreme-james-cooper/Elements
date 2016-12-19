@@ -1,5 +1,5 @@
 theory StackToAssembly
-imports StackLanguage BranchingAssemblyLanguage Iterate
+imports StackLanguage "../BranchingAssembly/BranchingAssemblyLanguage" "../Utilities/Iterate"
 begin
 
 primrec instruction_conv :: "stack_instruction \<Rightarrow> b_assembly list" where

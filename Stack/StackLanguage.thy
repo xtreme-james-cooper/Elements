@@ -1,5 +1,5 @@
 theory StackLanguage
-imports BasicComputation
+imports "../Utilities/BasicComputation"
 begin
 
 datatype stack_instruction = 
