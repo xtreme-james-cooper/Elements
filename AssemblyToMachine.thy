@@ -37,7 +37,7 @@ definition get_pc :: "l_assembly_program \<Rightarrow> assembly list \<Rightarro
   "get_pc \<Pi> \<pi> = 
     { the (build_symbol_table \<Pi> s) + converted_length \<pi>' | s \<pi>'. lookup \<Pi> s = Some (\<pi>' @ \<pi>) }"
 
-fun state_convert :: "l_assembly_program \<Rightarrow> assembly_state \<Rightarrow> machine_state set" where
+fun state_convert :: "l_assembly_program \<Rightarrow> l_assembly_state \<Rightarrow> machine_state set" where
   "state_convert \<Pi> (\<mu>, Some a, d, \<pi>, \<omega>) = {(\<mu>, a, d, pc, \<omega>) | pc. pc \<in> get_pc \<Pi> \<pi>}"
 | "state_convert \<Pi> (\<mu>, None, d, \<pi>, \<omega>) = {(\<mu>, a, d, pc, \<omega>) | a pc. pc \<in> get_pc \<Pi> \<pi>}"
 
@@ -220,7 +220,7 @@ lemma [simp]: "\<Sigma> \<in> state_convert \<Pi> (\<mu>, a, d, \<pi>, \<omega>)
     \<exists>aa pc. \<Sigma> = (\<mu>, aa, d, pc, \<omega>) \<and> pc \<in> get_pc \<Pi> \<pi>"
   by (cases a) auto
 
-lemma [simp]: "\<Sigma>\<^sub>M \<in> state_convert \<Pi> \<Sigma>\<^sub>A \<Longrightarrow> machine_output \<Sigma>\<^sub>M = assembly_output \<Sigma>\<^sub>A"
+lemma [simp]: "\<Sigma>\<^sub>M \<in> state_convert \<Pi> \<Sigma>\<^sub>A \<Longrightarrow> machine_output \<Sigma>\<^sub>M = l_assembly_output \<Sigma>\<^sub>A"
   by (induction \<Pi> \<Sigma>\<^sub>A rule: state_convert.induct) (induction \<Sigma>\<^sub>M rule: machine_output.induct, simp)+
 
 lemma eval_assembly_conv [simp]: "domain_distinct \<Pi> \<Longrightarrow> eval_l_assembly \<Pi> \<Sigma>\<^sub>A = Some \<Sigma>\<^sub>A' \<Longrightarrow> 

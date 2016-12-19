@@ -6,7 +6,6 @@ datatype b_assembly =
   ABAssm int
 | CBAssm "register set" computation
 | IBAssm "comparison set" "b_assembly list" "b_assembly list"
-| JBAssm code_label
 | PBAssm
 
 type_synonym b_assembly_program = "code_label \<rightharpoonup> b_assembly list \<times> code_label"
@@ -30,10 +29,6 @@ fun eval_b_assembly :: "b_assembly_program \<Rightarrow> b_assembly_state \<Righ
 | "eval_b_assembly \<Pi> (\<mu>, None, d, CBAssm dst cmp # \<pi>, s, \<omega>) = None"
 | "eval_b_assembly \<Pi> (\<mu>, a, d, IBAssm cmp \<pi>\<^sub>t \<pi>\<^sub>f # \<pi>, s, \<omega>) = 
     Some (\<mu>, a, d, (if should_jump d cmp then \<pi>\<^sub>t else \<pi>\<^sub>f) @ \<pi>, s, \<omega>)"
-| "eval_b_assembly \<Pi> (\<mu>, a, d, JBAssm s # \<pi>, s', \<omega>) = (
-    case \<Pi> s of 
-      Some (\<pi>', s'') \<Rightarrow> Some (\<mu>, None, d, \<pi>', s'', \<omega>)
-    | None \<Rightarrow> None)"
 | "eval_b_assembly \<Pi> (\<mu>, a, d, PBAssm # \<pi>, s, \<omega>) = Some (\<mu>, a, d, \<pi>, s, d # \<omega>)"
 
 fun b_assembly_output :: "b_assembly_state \<Rightarrow> output" where

@@ -36,49 +36,4 @@ termination
     thus "((f, c, m(x := None)), f, c, m) \<in> measure (card \<circ> dom o snd o snd)" by simp
   qed
 
-definition linearize :: "('a \<rightharpoonup> 'b) \<Rightarrow> 'a \<leadsto> 'b" where
-  "linearize f = finite_map_fold (op #) [] f"
-
-lemma [simp]: "finite (dom f) \<Longrightarrow> lookup (finite_map_fold (op #) [] f) x = f x"
-  proof (induction "(op #)::('a \<times> 'b) \<Rightarrow> 'a \<leadsto> 'b \<Rightarrow> 'a \<leadsto> 'b" "[]::'a \<leadsto> 'b" f 
-         rule: finite_map_fold.induct)
-  case 1
-    thus ?case by simp
-  next case 2
-    thus ?case by simp
-  next case (3 f)
-    let ?x = "SOME x. x \<in> dom f"
-    show ?case
-      proof (cases "x = ?x")
-      case True
-        from 3 have "Some (the (f ?x)) = f ?x" 
-          by (metis (mono_tags, lifting) domIff fun_upd_triv finite_map_fold.simps(3) 
-              not_Cons_self2 option.collapse someI_ex)
-        with 3 True show ?thesis by (simp add: Let_def)
-      next case False
-        from 3 have "lookup (finite_map_fold (op #) [] (f(?x := None))) x = (f(?x := None)) x" 
-          by fastforce
-        with 3 False show ?thesis by (simp add: Let_def)
-      qed
-  qed
-
-lemma [simp]: "finite (dom f) \<Longrightarrow> lookup (linearize f) x = f x"
-  by (simp add: linearize_def)
-
-lemma [simp]: "finite (dom f) \<Longrightarrow> domain_distinct (finite_map_fold (op #) [] f)"
-  proof (induction "(op #)::('a \<times> 'b) \<Rightarrow> 'a \<leadsto> 'b \<Rightarrow> 'a \<leadsto> 'b" "[]::'a \<leadsto> 'b" f 
-         rule: finite_map_fold.induct)
-  case 1
-    thus ?case by simp
-  next case 2
-    thus ?case by simp
-  next case (3 f)
-    let ?x = "SOME x. x \<in> dom f"
-    from 3 have "domain_distinct (finite_map_fold (op #) [] (f(?x := None)))" by fastforce
-    with 3 show ?case by (auto simp add: Let_def)
-  qed
-
-lemma [simp]: "finite (dom f) \<Longrightarrow> domain_distinct (linearize f)"
-  by (simp add: linearize_def)
-
 end

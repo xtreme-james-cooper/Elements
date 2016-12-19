@@ -1,5 +1,5 @@
 theory LinearAssemblyLanguage
-imports AssemblyLanguage FiniteMap Iterate
+imports AssemblyLanguage FiniteMap
 begin
 
 type_synonym l_assembly_state = "memory \<times> int option \<times> int \<times> assembly list \<times> output" 
@@ -26,14 +26,7 @@ fun eval_l_assembly :: "l_assembly_program \<Rightarrow> l_assembly_state \<Righ
     else Some (\<mu>, None, d, \<pi>, \<omega>))"
 | "eval_l_assembly \<Pi> (\<mu>, a, d, Print # \<pi>, \<omega>) = Some (\<mu>, a, d, \<pi>, d # \<omega>)"
 
-(* linearization correct *)
-
-lemma [simp]: "finite (dom \<Pi>) \<Longrightarrow> eval_assembly \<Pi> \<Sigma> = Some \<Sigma>' \<Longrightarrow> 
-    eval_l_assembly (linearize \<Pi>) \<Sigma> = Some \<Sigma>'"
-  by (induction \<Pi> \<Sigma> rule: eval_assembly.induct) auto
-
-theorem linearization_correct [simp]: "iterate (eval_assembly \<Pi>) \<Sigma> \<Sigma>' \<Longrightarrow> finite (dom \<Pi>) \<Longrightarrow> 
-    iterate (eval_l_assembly (linearize \<Pi>)) \<Sigma> \<Sigma>'"
-  by (induction "eval_assembly \<Pi>" \<Sigma> \<Sigma>' rule: iterate.induct) simp_all
+fun l_assembly_output :: "l_assembly_state \<Rightarrow> output" where
+  "l_assembly_output (\<mu>, a, d, \<pi>, \<omega>) = \<omega>"
 
 end

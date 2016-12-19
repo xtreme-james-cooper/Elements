@@ -2,55 +2,50 @@ theory Debranching
 imports BranchingAssemblyLanguage AssemblyLanguage Iterate FiniteMap
 begin
 
-fun branch_instr_convert :: "code_label set \<Rightarrow> b_assembly list \<Rightarrow> 
-    assembly list \<times> (code_label \<rightharpoonup> assembly list)" where
-  "branch_instr_convert ss [] = ([], empty)"
-| "branch_instr_convert ss (ABAssm x # \<pi>) = (
-    let (\<pi>', \<Pi>) = branch_instr_convert ss \<pi>
-    in (AAssm x # \<pi>', \<Pi>))"
-| "branch_instr_convert ss (CBAssm dst cmp # \<pi>) = (
-    let (\<pi>', \<Pi>) = branch_instr_convert ss \<pi>
-    in (CAssm dst cmp # \<pi>', \<Pi>))"
-| "branch_instr_convert ss (IBAssm jmp \<pi>\<^sub>t \<pi>\<^sub>f # \<pi>) = (
-    let (\<pi>\<^sub>t', \<Pi>\<^sub>1) = branch_instr_convert ss \<pi>\<^sub>t
-    in let (\<pi>\<^sub>f', \<Pi>\<^sub>2) = branch_instr_convert (ss \<union> dom \<Pi>\<^sub>1) \<pi>\<^sub>f
-    in let (\<pi>', \<Pi>\<^sub>3) = branch_instr_convert (ss \<union> dom \<Pi>\<^sub>1 \<union> dom \<Pi>\<^sub>2) \<pi>
-    in let s\<^sub>t = new_label (ss \<union> dom \<Pi>\<^sub>1 \<union> dom \<Pi>\<^sub>2 \<union> dom \<Pi>\<^sub>3)
-    in let s\<^sub>e = new_label (ss \<union> dom \<Pi>\<^sub>1 \<union> dom \<Pi>\<^sub>2 \<union> dom \<Pi>\<^sub>3 \<union> {s\<^sub>t})
-    in (JAssm jmp s\<^sub>t # \<pi>\<^sub>f' @ [JAssm {EQ, LT, GT} s\<^sub>e], 
-        \<Pi>\<^sub>1 ++ \<Pi>\<^sub>2 ++ \<Pi>\<^sub>3 ++ [s\<^sub>t \<mapsto> \<pi>\<^sub>t' @ [JAssm {EQ, LT, GT} s\<^sub>e], s\<^sub>e \<mapsto> \<pi>']))"
-| "branch_instr_convert ss (JBAssm s # \<pi>) = ([JAssm {EQ, LT, GT} s], empty)"
-| "branch_instr_convert ss (PBAssm # \<pi>) = (
-    let (\<pi>', \<Pi>) = branch_instr_convert ss \<pi>
-    in (PAssm # \<pi>', \<Pi>))"
+fun branch_instr_convert :: "code_label set \<Rightarrow> b_assembly list \<Rightarrow> code_label \<Rightarrow> 
+    assembly list \<times> code_label \<times> (code_label \<rightharpoonup> assembly list \<times> code_label)" where
+  "branch_instr_convert ss [] s = ([], s, empty)"
+| "branch_instr_convert ss (ABAssm x # \<pi>) s = (
+    let (\<pi>', s', \<Pi>) = branch_instr_convert ss \<pi> s
+    in (AAssm x # \<pi>', s', \<Pi>))"
+| "branch_instr_convert ss (CBAssm dst cmp # \<pi>) s = (
+    let (\<pi>', s', \<Pi>) = branch_instr_convert ss \<pi> s
+    in (CAssm dst cmp # \<pi>', s', \<Pi>))"
+| "branch_instr_convert ss (IBAssm jmp \<pi>\<^sub>t \<pi>\<^sub>f # \<pi>) s = (
+    let s\<^sub>e = new_label ss
+    in let (\<pi>\<^sub>t', s\<^sub>t, \<Pi>\<^sub>1) = branch_instr_convert (ss \<union> {s\<^sub>e}) \<pi>\<^sub>t s\<^sub>e
+    in let (\<pi>\<^sub>f', s\<^sub>f, \<Pi>\<^sub>2) = branch_instr_convert (ss \<union> dom \<Pi>\<^sub>1 \<union> {s\<^sub>e}) \<pi>\<^sub>f s\<^sub>e
+    in let (\<pi>', s', \<Pi>\<^sub>3) = branch_instr_convert (ss \<union> dom \<Pi>\<^sub>1 \<union> dom \<Pi>\<^sub>2 \<union> {s\<^sub>e}) \<pi> s
+    in (JAssm jmp s\<^sub>t # \<pi>\<^sub>f', s\<^sub>f, \<Pi>\<^sub>1 ++ \<Pi>\<^sub>2 ++ \<Pi>\<^sub>3 ++ [s\<^sub>t \<mapsto> (\<pi>\<^sub>t', s\<^sub>t), s\<^sub>e \<mapsto> (\<pi>', s')]))"
+| "branch_instr_convert ss (PBAssm # \<pi>) s = (
+    let (\<pi>', s', \<Pi>) = branch_instr_convert ss \<pi> s
+    in (PAssm # \<pi>', s', \<Pi>))"
 
-primrec block_convert :: "code_label set \<Rightarrow> code_label \<times> b_assembly list \<Rightarrow> assembly_program \<Rightarrow> 
-    assembly_program" where
-  "block_convert ss (s, \<pi>) \<Pi> = (let (\<pi>', \<Pi>') = branch_instr_convert (ss \<union> dom \<Pi>) \<pi> in \<Pi>'(s \<mapsto> \<pi>'))"
+fun block_convert :: "code_label set \<Rightarrow> code_label \<times> b_assembly list \<times> code_label \<Rightarrow> 
+    assembly_program \<Rightarrow> assembly_program" where
+  "block_convert ss (s, \<pi>, s') \<Pi> = (
+    let (\<pi>', s'', \<Pi>') = branch_instr_convert (ss \<union> dom \<Pi>) \<pi> s' 
+    in \<Pi>'(s \<mapsto> (\<pi>', s'')))"
 
 definition debranch :: "b_assembly_program \<Rightarrow> assembly_program" where
   "debranch \<Pi> = finite_map_fold (block_convert (dom \<Pi>)) empty \<Pi>"
 
-function jump_join :: "assembly list \<Rightarrow> assembly_program \<Rightarrow> assembly list set" where
-  "jump_join \<pi> \<Pi> = (
+function remove_continuations :: "assembly list \<Rightarrow> code_label \<Rightarrow> assembly_program \<Rightarrow> 
+    (assembly list \<times> code_label) set" where
+  "remove_continuations \<pi> s \<Pi> = (
     if finite (dom \<Pi>)
-    then case last \<pi> of
-        JAssm jmp s \<Rightarrow> (
-          if jmp = {GT, EQ, LT} 
-          then case \<Pi> s of 
-              Some \<pi>' \<Rightarrow> insert \<pi> (jump_join (butlast \<pi> @ \<pi>') (\<Pi>(s := None)))
-            | None \<Rightarrow> {\<pi>} 
-          else {\<pi>})
-      | _ \<Rightarrow> {\<pi>}
-    else {\<pi>})"
+    then case \<Pi> s of 
+        Some (\<pi>', s') \<Rightarrow> insert (\<pi>, s) (remove_continuations (\<pi> @ \<pi>') s' (\<Pi>(s := None)))
+      | None \<Rightarrow> {(\<pi>, s)}
+    else {(\<pi>, s)})"
   by pat_completeness auto
 termination
-  by (relation "measure (card o dom o snd)") (auto, meson card_Diff1_less domI)
+  by (relation "measure (card o dom o snd o snd)") (auto, meson card_Diff1_less domI)
 
 fun state_convert :: "code_label set \<Rightarrow> b_assembly_state \<Rightarrow> assembly_state set" where
-  "state_convert ss (\<mu>, a, d, \<pi>, \<omega>) = (
-    let (\<pi>', \<Pi>) = branch_instr_convert ss \<pi> 
-    in {(\<mu>, a, d, \<pi>'', \<omega>) | \<pi>''. \<pi>'' \<in> jump_join \<pi>' \<Pi>})"
+  "state_convert ss (\<mu>, a, d, \<pi>, s, \<omega>) = (
+    let (\<pi>', s', \<Pi>) = branch_instr_convert ss \<pi> s
+    in {(\<mu>, a, d, \<pi>'', s'', \<omega>) | \<pi>'' s''. (\<pi>'', s'') \<in> remove_continuations \<pi>' s' \<Pi>})"
 
 (* conversion correctness *)
 
@@ -161,18 +156,7 @@ lemma debranch_step: "eval_b_assembly \<Pi> \<Sigma>\<^sub>B = Some \<Sigma>\<^s
   case 1
     thus ?case by simp
   next case (2 \<Pi> \<mu> a d x \<pi> \<omega>)
-    thus ?case
-      proof (cases "branch_instr_convert (dom \<Pi>) \<pi>")
-      case (Pair \<pi>\<^sub>A \<Pi>\<^sub>A)
-        with 2 obtain \<pi>\<^sub>A' where P: "\<Sigma>\<^sub>A = (\<mu>, a, d, \<pi>\<^sub>A', \<omega>) \<and> \<pi>\<^sub>A' \<in> jump_join (AAssm x # \<pi>\<^sub>A) \<Pi>\<^sub>A" 
-          by auto
-        then obtain \<pi>\<^sub>A'' where P': "\<pi>\<^sub>A' = AAssm x # \<pi>\<^sub>A'' \<and> \<pi>\<^sub>A'' \<in> jump_join \<pi>\<^sub>A \<Pi>\<^sub>A" 
-          by (metis jump_join_a)
-        from 2 have S: "\<Sigma>\<^sub>B' = (\<mu>, Some x, d, \<pi>, \<omega>)" by simp
-        from P' Pair have "(\<mu>, Some x, d, \<pi>\<^sub>A'', \<omega>) \<in> state_convert (dom \<Pi>) (\<mu>, Some x, d, \<pi>, \<omega>)" 
-          by simp
-        with S P P' iter_one eval_assembly.simps(2) show ?thesis by metis
-      qed
+    thus ?case by simp
   next case (3 \<Pi> \<mu> a d dst cmp \<pi> \<omega>)
     thus ?case by simp
   next case 4
