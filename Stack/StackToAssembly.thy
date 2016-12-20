@@ -77,7 +77,7 @@ primrec instruction_conv :: "stack_instruction \<Rightarrow> b_assembly list" wh
     CBAssm {M} (Decr M)]"
 
 definition program_convert :: "stack_program \<Rightarrow> b_assembly_program" where
-  "program_convert \<Pi> = map_option (\<lambda>(\<pi>, s). (concat (map instruction_conv \<pi>), s)) o \<Pi>"
+  "program_convert \<Pi> = map_option (\<lambda>(\<pi>, s). (ABAssm 0 # concat (map instruction_conv \<pi>), s)) o \<Pi>"
 
 primrec stack_to_mem :: "int list \<Rightarrow> (int \<Rightarrow> int) \<Rightarrow> int \<Rightarrow> int" where
   "stack_to_mem [] \<mu> k = (if k = 0 then 0 else \<mu> k)"
@@ -96,7 +96,7 @@ lemma [simp]: "dom (program_convert \<Pi>) = dom \<Pi>"
   by (auto simp add: program_convert_def)
 
 lemma [simp]: "\<Pi> s = Some (\<pi>, s') \<Longrightarrow> 
-    program_convert \<Pi> s = Some (concat (map instruction_conv \<pi>), s')"
+    program_convert \<Pi> s = Some (ABAssm 0 # concat (map instruction_conv \<pi>), s')"
   by (simp add: program_convert_def)
 
 lemma [simp]: "stack_to_mem \<sigma> \<mu> 0 = int (length \<sigma>)"
@@ -157,10 +157,13 @@ lemma eval_stack_conv [simp]: "eval_stack \<Pi> \<Sigma>\<^sub>S = Some \<Sigma>
             let ?\<pi>' = "concat (map instruction_conv \<pi>)"
             have X: "(stack_to_mem \<sigma> \<mu>, Some 0, d, ?\<pi>', s', \<omega>) \<in> state_convert (\<sigma>, \<pi>, s', \<omega>)" 
               by auto
-            from Some Pair have 
+            from Some Pair have Y:
               "eval_b_assembly (program_convert \<Pi>) (stack_to_mem \<sigma> \<mu>, Some 0, d, [], s, \<omega>) = 
+                Some (stack_to_mem \<sigma> \<mu>, None, d, ABAssm 0 # ?\<pi>', s', \<omega>)" by simp
+            from Some Pair have "eval_b_assembly (program_convert \<Pi>) 
+              (stack_to_mem \<sigma> \<mu>, None, d, ABAssm 0 # ?\<pi>', s', \<omega>) = 
                 Some (stack_to_mem \<sigma> \<mu>, Some 0, d, ?\<pi>', s', \<omega>)" by simp
-            with X M S iter_one show ?thesis by metis
+            with X Y M S iter_two show ?thesis by metis
           qed
       next case None
         with 1 show ?thesis by simp

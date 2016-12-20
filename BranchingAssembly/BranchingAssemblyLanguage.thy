@@ -16,7 +16,7 @@ type_synonym b_assembly_state = "memory \<times> int option \<times> int \<times
 fun eval_b_assembly :: "b_assembly_program \<Rightarrow> b_assembly_state \<Rightarrow> b_assembly_state option" where
   "eval_b_assembly \<Pi> (\<mu>, a, d, [], s, \<omega>) = (
     case \<Pi> s of 
-      Some (\<pi>', s') \<Rightarrow> Some (\<mu>, a, d, \<pi>', s', \<omega>)
+      Some (\<pi>', s') \<Rightarrow> Some (\<mu>, None, d, \<pi>', s', \<omega>)
     | None \<Rightarrow> None)"
 | "eval_b_assembly \<Pi> (\<mu>, a, d, ABAssm x # \<pi>, s, \<omega>) = Some (\<mu>, Some x, d, \<pi>, s, \<omega>)"
 | "eval_b_assembly \<Pi> (\<mu>, Some a, d, CBAssm dst cmp # \<pi>, s, \<omega>) = (
@@ -27,8 +27,8 @@ fun eval_b_assembly :: "b_assembly_program \<Rightarrow> b_assembly_state \<Righ
       if D \<in> dst then n else d, 
       \<pi>, s, \<omega>))"
 | "eval_b_assembly \<Pi> (\<mu>, None, d, CBAssm dst cmp # \<pi>, s, \<omega>) = None"
-| "eval_b_assembly \<Pi> (\<mu>, a, d, IBAssm cmp \<pi>\<^sub>t \<pi>\<^sub>f # \<pi>, s, \<omega>) = 
-    Some (\<mu>, a, d, (if should_jump d cmp then \<pi>\<^sub>t else \<pi>\<^sub>f) @ \<pi>, s, \<omega>)"
+| "eval_b_assembly \<Pi> (\<mu>, a, d, IBAssm jmp \<pi>\<^sub>t \<pi>\<^sub>f # \<pi>, s, \<omega>) = 
+    Some (\<mu>, a, d, (if should_jump d jmp then \<pi>\<^sub>t else \<pi>\<^sub>f) @ \<pi>, s, \<omega>)"
 | "eval_b_assembly \<Pi> (\<mu>, a, d, PBAssm # \<pi>, s, \<omega>) = Some (\<mu>, a, d, \<pi>, s, d # \<omega>)"
 
 fun b_assembly_output :: "b_assembly_state \<Rightarrow> output" where
