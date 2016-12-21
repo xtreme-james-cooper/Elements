@@ -133,10 +133,77 @@ lemma [simp]: "remove_continuations \<pi> s \<Pi> = (\<pi>', s') \<Longrightarro
       qed
   qed
 
+lemma [simp]: "finite ss \<Longrightarrow> ss \<supseteq> dom \<Pi> \<Longrightarrow> \<Pi> s = Some (\<pi>\<^sub>B, s') \<Longrightarrow> 
+  branch_instr_convert ss \<pi>\<^sub>B s' = (\<pi>\<^sub>A, s'', \<Pi>') \<Longrightarrow> 
+    remove_continuations \<pi>\<^sub>A s'' \<Pi>' = (\<pi>\<^sub>A', s''') \<Longrightarrow> 
+      finite_map_fold (block_convert ss) empty \<Pi> s = Some (\<pi>\<^sub>A', s''')"
+  proof (induction "block_convert ss" "empty :: code_label \<Rightarrow> (assembly list \<times> code_label) option" \<Pi> 
+         rule: finite_map_fold.induct)
+  case 1
+    thus ?case by (metis finite_subset)
+  next case 2
+    hence False by simp
+    thus ?case by simp
+  next case (3 \<Pi>)
+    let ?x = "SOME x. x \<in> dom \<Pi>"
+    let ?ih = "finite_map_fold (block_convert ss) Map.empty (\<Pi>(?x := None))"
+    show ?case
+      proof (cases "s = ?x")
+      case True
+        from 3 have "finite (dom \<Pi>)" by simp
+        from 3 have "card (dom \<Pi>) \<noteq> 0" by simp
+        from 3 have "
+          finite ss \<Longrightarrow>
+          dom (\<Pi>(?x := None)) \<subseteq> ss \<Longrightarrow>
+          (\<Pi>(?x := None)) s = Some (\<pi>\<^sub>B, s') \<Longrightarrow>
+          branch_instr_convert (dom (\<Pi>(?x := None))) \<pi>\<^sub>B s' = (\<pi>\<^sub>A, s'', \<Pi>') \<Longrightarrow>
+          remove_continuations \<pi>\<^sub>A s'' \<Pi>' = (\<pi>\<^sub>A', s''') \<Longrightarrow> ?ih s = Some (\<pi>\<^sub>A', s''')" by simp
+        from 3 have "finite ss" by simp
+        from 3 have "dom \<Pi> \<subseteq> ss" by simp
+        from 3 have "\<Pi> s = Some (\<pi>\<^sub>B, s')" by simp
+        from 3 have "branch_instr_convert ss \<pi>\<^sub>B s' = (\<pi>\<^sub>A, s'', \<Pi>')" by simp
+        from 3 have "remove_continuations \<pi>\<^sub>A s'' \<Pi>' = (\<pi>\<^sub>A', s''')" by simp
+    
+    
+    
+        have "(let (\<pi>', s'', \<Pi>') = branch_instr_convert (ss \<union> dom ?ih) \<pi>\<^sub>B s' in \<Pi>'(s \<mapsto> (\<pi>', s''))) s = Some (\<pi>\<^sub>A', s''')" by simp
+        with 3 have "block_convert ss (s, the (\<Pi> s)) ?ih s = Some (\<pi>\<^sub>A', s''')" by simp
+        with True have "block_convert ss (?x, the (\<Pi> ?x)) ?ih s = Some (\<pi>\<^sub>A', s''')" by simp
+        with 3 show ?thesis by (simp add: Let_def)
+      next case False
+        from 3 have "finite (dom \<Pi>)" by simp
+        from 3 have "card (dom \<Pi>) \<noteq> 0" by simp
+        from 3 have "
+          finite ss \<Longrightarrow>
+          dom (\<Pi>(?x := None)) \<subseteq> ss \<Longrightarrow>
+          (\<Pi>(?x := None)) s = Some (\<pi>\<^sub>B, s') \<Longrightarrow>
+          branch_instr_convert (dom (\<Pi>(?x := None))) \<pi>\<^sub>B s' = (\<pi>\<^sub>A, s'', \<Pi>') \<Longrightarrow>
+          remove_continuations \<pi>\<^sub>A s'' \<Pi>' = (\<pi>\<^sub>A', s''') \<Longrightarrow> ?ih s = Some (\<pi>\<^sub>A', s''')" by simp
+        from 3 have "finite ss" by simp
+        from 3 have "dom \<Pi> \<subseteq> ss" by simp
+        from 3 have "\<Pi> s = Some (\<pi>\<^sub>B, s')" by simp
+        from 3 have "branch_instr_convert ss \<pi>\<^sub>B s' = (\<pi>\<^sub>A, s'', \<Pi>')" by simp
+        from 3 have "remove_continuations \<pi>\<^sub>A s'' \<Pi>' = (\<pi>\<^sub>A', s''')" by simp
+    
+    
+    have "block_convert ss (s, \<pi>, s') ?ih = (
+        let (\<pi>', s'', \<Pi>') = branch_instr_convert (ss \<union> dom ?ih) \<pi> s' 
+        in \<Pi>'(s \<mapsto> (\<pi>', s'')))" by simp
+    
+        have "block_convert ss (?x, the (\<Pi> ?x)) ?ih s = Some (\<pi>\<^sub>A', s''')" by simp
+        with 3 show ?thesis by (simp add: Let_def)
+      qed
+  qed
+
+lemma [simp]: "finite (dom \<Pi>) \<Longrightarrow>  \<Pi> s = Some (\<pi>\<^sub>B, s') \<Longrightarrow> 
+  branch_instr_convert (dom \<Pi>) \<pi>\<^sub>B s' = (\<pi>\<^sub>A, s'', \<Pi>') \<Longrightarrow> 
+    remove_continuations \<pi>\<^sub>A s'' \<Pi>' = (\<pi>\<^sub>A', s''') \<Longrightarrow> debranch \<Pi> s = Some (\<pi>\<^sub>A', s''')"
+  by (simp add: debranch_def)
+
 lemma [simp]: "assembly_output (state_convert ss \<Sigma>\<^sub>B) = b_assembly_output \<Sigma>\<^sub>B"
   by (induction \<Sigma>\<^sub>B rule: b_assembly_output.induct) (simp split: prod.splits)
 
-lemma debranch_step: "eval_b_assembly \<Pi> \<Sigma>\<^sub>B = Some \<Sigma>\<^sub>B' \<Longrightarrow> 
+lemma debranch_step: "finite (dom \<Pi>) \<Longrightarrow> eval_b_assembly \<Pi> \<Sigma>\<^sub>B = Some \<Sigma>\<^sub>B' \<Longrightarrow> 
     eval_assembly (debranch \<Pi>) (state_convert (dom \<Pi>) \<Sigma>\<^sub>B) = Some (state_convert (dom \<Pi>) \<Sigma>\<^sub>B')"
   proof (induction \<Pi> \<Sigma>\<^sub>B rule: eval_b_assembly.induct)
   case (1 \<Pi> \<mu> a d s \<omega>)
@@ -146,12 +213,9 @@ lemma debranch_step: "eval_b_assembly \<Pi> \<Sigma>\<^sub>B = Some \<Sigma>\<^s
       by (cases "branch_instr_convert (dom \<Pi>) \<pi>\<^sub>B s'") simp
     obtain \<pi>\<^sub>A' s''' where C: "remove_continuations \<pi>\<^sub>A s'' \<Pi>' = (\<pi>\<^sub>A', s''')"
       by (cases "remove_continuations \<pi>\<^sub>A s'' \<Pi>'") simp
-    from B C have S: "state_convert (dom \<Pi>) (\<mu>, None, d, \<pi>\<^sub>B, s', \<omega>) = (\<mu>, None, d, \<pi>\<^sub>A', s''', \<omega>)"
+    from B C have "state_convert (dom \<Pi>) (\<mu>, None, d, \<pi>\<^sub>B, s', \<omega>) = (\<mu>, None, d, \<pi>\<^sub>A', s''', \<omega>)"
       by simp
-
-
-    have "debranch \<Pi> s = Some (\<pi>\<^sub>A', s''')" by simp
-    with 1 PS S show ?case by simp
+    with 1 PS B C show ?case by simp
   next case (2 \<Pi> \<mu> a d x \<pi>\<^sub>B s \<omega>)
     obtain \<pi>\<^sub>A s' \<Pi>' where B: "branch_instr_convert (dom \<Pi>) \<pi>\<^sub>B s = (\<pi>\<^sub>A, s', \<Pi>')"
       by (cases "branch_instr_convert (dom \<Pi>) \<pi>\<^sub>B s") simp
@@ -194,12 +258,25 @@ lemma debranch_step: "eval_b_assembly \<Pi> \<Sigma>\<^sub>B = Some \<Sigma>\<^s
         (JAssm jmp s\<^sub>t # \<pi>\<^sub>A\<^sub>f, s\<^sub>f, ?\<Pi>')" by simp
     with CF have SI: "state_convert (dom \<Pi>) (\<mu>, a, d, IBAssm jmp \<pi>\<^sub>B\<^sub>t \<pi>\<^sub>B\<^sub>f # \<pi>\<^sub>B, s, \<omega>) = 
         (\<mu>, a, d, JAssm jmp s\<^sub>t # \<pi>\<^sub>A\<^sub>f', s\<^sub>f', \<omega>)" by simp
+    thus ?case
+      proof (cases "should_jump d jmp")
+      case True
 
 
 
+        have "(case debranch \<Pi> s\<^sub>t of Some (\<pi>', s'') \<Rightarrow> Some (\<mu>, None, d, \<pi>', s'', \<omega>) | None \<Rightarrow> None) = Some (state_convert (dom \<Pi>) (\<mu>, None, d, \<pi>\<^sub>B\<^sub>t @ \<pi>\<^sub>B, s, \<omega>))" by simp
+        with 5 SI True show ?thesis by auto
+      next case False
 
-    have "eval_assembly (debranch \<Pi>) (\<mu>, a, d, JAssm jmp s\<^sub>t # \<pi>\<^sub>A\<^sub>f', s\<^sub>f', \<omega>) = Some (state_convert (dom \<Pi>) (\<mu>, a, d, (if should_jump d jmp then \<pi>\<^sub>B\<^sub>t else \<pi>\<^sub>B\<^sub>f) @ \<pi>\<^sub>B, s, \<omega>))" by simp
-    with 5 SI show ?case by simp
+
+have "state_convert (dom \<Pi>) (\<mu>, None, d, \<pi>\<^sub>B\<^sub>f @ \<pi>\<^sub>B, s, \<omega>) = (
+    let (\<pi>', s', \<Pi>') = branch_instr_convert (dom \<Pi>) (\<pi>\<^sub>B\<^sub>f @ \<pi>\<^sub>B) s
+    in let (\<pi>\<^sub>A\<^sub>f', s\<^sub>f') = remove_continuations \<pi>' s' \<Pi>'
+    in (\<mu>, None, d, \<pi>\<^sub>A\<^sub>f', s\<^sub>f', \<omega>))" by simp
+
+        have "(\<mu>, None, d, \<pi>\<^sub>A\<^sub>f', s\<^sub>f', \<omega>) = state_convert (dom \<Pi>) (\<mu>, None, d, \<pi>\<^sub>B\<^sub>f @ \<pi>\<^sub>B, s, \<omega>)" by simp
+        with 5 SI False show ?thesis by auto
+      qed
   next case (6 \<Pi> \<mu> a d \<pi>\<^sub>B s \<omega>)
     obtain \<pi>\<^sub>A s' \<Pi>' where B: "branch_instr_convert (dom \<Pi>) \<pi>\<^sub>B s = (\<pi>\<^sub>A, s', \<Pi>')"
       by (cases "branch_instr_convert (dom \<Pi>) \<pi>\<^sub>B s") simp
@@ -212,7 +289,7 @@ lemma debranch_step: "eval_b_assembly \<Pi> \<Sigma>\<^sub>B = Some \<Sigma>\<^s
     with 6 A show ?case by simp
   qed 
 
-theorem debranching_correct [simp]: "iterate (eval_b_assembly \<Pi>) \<Sigma>\<^sub>B \<Sigma>\<^sub>B' \<Longrightarrow> 
+theorem debranching_correct [simp]: "iterate (eval_b_assembly \<Pi>) \<Sigma>\<^sub>B \<Sigma>\<^sub>B' \<Longrightarrow> finite (dom \<Pi>) \<Longrightarrow> 
     iterate (eval_assembly (debranch \<Pi>)) (state_convert (dom \<Pi>) \<Sigma>\<^sub>B) (state_convert (dom \<Pi>) \<Sigma>\<^sub>B')"
   proof (induction "eval_b_assembly \<Pi>" \<Sigma>\<^sub>B \<Sigma>\<^sub>B' rule: iterate.induct)
   case iter_refl
