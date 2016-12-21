@@ -17,9 +17,9 @@ fun branch_instr_convert :: "code_label set \<Rightarrow> b_assembly list \<Righ
     in (CAssm dst cmp # \<pi>', s', \<Pi>))"
 | "branch_instr_convert ss (IBAssm jmp \<pi>\<^sub>t \<pi>\<^sub>f # \<pi>) s = (
     let s\<^sub>e = new_label ss
-    in let (\<pi>\<^sub>t', s\<^sub>t, \<Pi>\<^sub>1) = branch_instr_convert (ss \<union> {s\<^sub>e}) \<pi>\<^sub>t s\<^sub>e
-    in let (\<pi>\<^sub>f', s\<^sub>f, \<Pi>\<^sub>2) = branch_instr_convert (ss \<union> dom \<Pi>\<^sub>1 \<union> {s\<^sub>e}) \<pi>\<^sub>f s\<^sub>e
-    in let (\<pi>', s', \<Pi>\<^sub>3) = branch_instr_convert (ss \<union> dom \<Pi>\<^sub>1 \<union> dom \<Pi>\<^sub>2 \<union> {s\<^sub>e}) \<pi> s
+    in let (\<pi>', s', \<Pi>\<^sub>1) = branch_instr_convert (ss \<union> {s\<^sub>e}) \<pi> s
+    in let (\<pi>\<^sub>t', s\<^sub>t, \<Pi>\<^sub>2) = branch_instr_convert (ss \<union> dom \<Pi>\<^sub>1 \<union> {s\<^sub>e}) \<pi>\<^sub>t s\<^sub>e
+    in let (\<pi>\<^sub>f', s\<^sub>f, \<Pi>\<^sub>3) = branch_instr_convert (ss \<union> dom \<Pi>\<^sub>1 \<union> dom \<Pi>\<^sub>2 \<union> {s\<^sub>e}) \<pi>\<^sub>f s\<^sub>e
     in (JAssm jmp s\<^sub>t # \<pi>\<^sub>f', s\<^sub>f, \<Pi>\<^sub>1 ++ \<Pi>\<^sub>2 ++ \<Pi>\<^sub>3 ++ [s\<^sub>t \<mapsto> (\<pi>\<^sub>t', s\<^sub>t), s\<^sub>e \<mapsto> (\<pi>', s')]))"
 | "branch_instr_convert ss (PBAssm # \<pi>) s = (
     let (\<pi>', s', \<Pi>) = branch_instr_convert ss \<pi> s
@@ -63,15 +63,15 @@ lemma [simp]: "branch_instr_convert ss \<pi>\<^sub>B s = (\<pi>\<^sub>A, s', \<P
   next case (4 ss jmp \<pi>\<^sub>B\<^sub>t \<pi>\<^sub>B\<^sub>f \<pi>\<^sub>B s)
     let ?s\<^sub>e = "new_label ss"
     have "finite (dom \<Pi>)"
-      proof (cases "branch_instr_convert (ss \<union> {?s\<^sub>e}) \<pi>\<^sub>B\<^sub>t ?s\<^sub>e")
-      case (fields \<pi>\<^sub>t' s\<^sub>t \<Pi>\<^sub>1) note F1 = fields
+      proof (cases "branch_instr_convert (ss \<union> {?s\<^sub>e}) \<pi>\<^sub>B s")
+      case (fields \<pi>' s'' \<Pi>\<^sub>1) note F1 = fields
         thus ?thesis
-          proof (cases "branch_instr_convert (ss \<union> dom \<Pi>\<^sub>1 \<union> {?s\<^sub>e}) \<pi>\<^sub>B\<^sub>f ?s\<^sub>e")
-          case (fields \<pi>\<^sub>f' s\<^sub>f \<Pi>\<^sub>2) note F2 = fields
+          proof (cases "branch_instr_convert (ss \<union> dom \<Pi>\<^sub>1 \<union> {?s\<^sub>e}) \<pi>\<^sub>B\<^sub>t ?s\<^sub>e")
+          case (fields \<pi>\<^sub>t' s\<^sub>t \<Pi>\<^sub>2) note F2 = fields
             thus ?thesis
-              proof (cases "branch_instr_convert (ss \<union> dom \<Pi>\<^sub>1 \<union> dom \<Pi>\<^sub>2 \<union> {?s\<^sub>e}) \<pi>\<^sub>B s")
-              case (fields \<pi>' s'' \<Pi>\<^sub>3)
-                with 4 F1 F2 fields show ?thesis by auto
+              proof (cases "branch_instr_convert (ss \<union> dom \<Pi>\<^sub>1 \<union> dom \<Pi>\<^sub>2 \<union> {?s\<^sub>e}) \<pi>\<^sub>B\<^sub>f ?s\<^sub>e")
+              case (fields \<pi>\<^sub>f' s\<^sub>f \<Pi>\<^sub>3)
+                with 4 F1 F2 show ?thesis by auto
               qed
           qed
       qed
@@ -103,8 +103,8 @@ lemma [simp]: "finite ss \<Longrightarrow> ss \<supseteq> dom \<Pi> \<Longrighta
 lemma [simp]: "finite (dom \<Pi>) \<Longrightarrow> finite (dom (debranch \<Pi>))"
   by (simp add: debranch_def)
 
-lemma [simp]: "(\<pi>', s') = remove_continuations \<pi> s \<Pi> \<Longrightarrow>
-    (\<iota> # \<pi>', s') = remove_continuations (\<iota> # \<pi>) s \<Pi>"
+lemma [simp]: "remove_continuations \<pi> s \<Pi> = (\<pi>', s') \<Longrightarrow>
+    remove_continuations (\<iota> # \<pi>) s \<Pi> = (\<iota> # \<pi>', s')"
   proof (induction \<pi> s \<Pi> rule: remove_continuations.induct)
   case 1
     thus ?case by simp
@@ -118,8 +118,8 @@ lemma [simp]: "(\<pi>', s') = remove_continuations \<pi> s \<Pi> \<Longrightarro
       qed
   qed
 
-lemma [simp]: "(\<pi>', s') = remove_continuations \<pi> s \<Pi> \<Longrightarrow>
-    (\<pi>\<^sub>2 @ \<pi>', s') = remove_continuations (\<pi>\<^sub>2 @ \<pi>) s \<Pi>"
+lemma [simp]: "remove_continuations \<pi> s \<Pi> = (\<pi>', s') \<Longrightarrow>
+    remove_continuations (\<pi>\<^sub>2 @ \<pi>) s \<Pi> = (\<pi>\<^sub>2 @ \<pi>', s')"
   proof (induction \<pi> s \<Pi> rule: remove_continuations.induct)
   case 1
     thus ?case by simp
@@ -142,148 +142,73 @@ lemma debranch_step: "eval_b_assembly \<Pi> \<Sigma>\<^sub>B = Some \<Sigma>\<^s
   case (1 \<Pi> \<mu> a d s \<omega>)
     then obtain ps where "\<Pi> s = Some ps" by (cases "\<Pi> s") simp_all
     then obtain \<pi>\<^sub>B s' where PS: "\<Pi> s = Some (\<pi>\<^sub>B, s')" by (cases ps) simp
-    obtain \<pi>\<^sub>A s'' \<Pi>' where B: "(\<pi>\<^sub>A, s'', \<Pi>') = branch_instr_convert (dom \<Pi>) \<pi>\<^sub>B s'" 
+    obtain \<pi>\<^sub>A s'' \<Pi>' where B: "branch_instr_convert (dom \<Pi>) \<pi>\<^sub>B s' = (\<pi>\<^sub>A, s'', \<Pi>')" 
       by (cases "branch_instr_convert (dom \<Pi>) \<pi>\<^sub>B s'") simp
-    obtain \<pi>\<^sub>A' s''' where C: "(\<pi>\<^sub>A', s''') = remove_continuations \<pi>\<^sub>A s'' \<Pi>'"
+    obtain \<pi>\<^sub>A' s''' where C: "remove_continuations \<pi>\<^sub>A s'' \<Pi>' = (\<pi>\<^sub>A', s''')"
       by (cases "remove_continuations \<pi>\<^sub>A s'' \<Pi>'") simp
-    have S: "state_convert (dom \<Pi>) (\<mu>, None, d, \<pi>\<^sub>B, s', \<omega>) = (\<mu>, None, d, \<pi>\<^sub>A', s''', \<omega>)"
-      proof -
-        from B have "state_convert (dom \<Pi>) (\<mu>, None, d, \<pi>\<^sub>B, s', \<omega>) = (
-          let (\<pi>\<^sub>A, s'', \<Pi>') = (\<pi>\<^sub>A, s'', \<Pi>')
-          in let (\<pi>'', s'') = remove_continuations \<pi>\<^sub>A s'' \<Pi>'
-          in (\<mu>, None, d, \<pi>'', s'', \<omega>))" by simp
-        with C have "state_convert (dom \<Pi>) (\<mu>, None, d, \<pi>\<^sub>B, s', \<omega>) = (
-          let (\<pi>\<^sub>A', s''') = (\<pi>\<^sub>A', s''')
-          in (\<mu>, None, d, \<pi>\<^sub>A', s''', \<omega>))" by simp
-        thus ?thesis by simp
-      qed
+    from B C have S: "state_convert (dom \<Pi>) (\<mu>, None, d, \<pi>\<^sub>B, s', \<omega>) = (\<mu>, None, d, \<pi>\<^sub>A', s''', \<omega>)"
+      by simp
 
 
     have "debranch \<Pi> s = Some (\<pi>\<^sub>A', s''')" by simp
     with 1 PS S show ?case by simp
   next case (2 \<Pi> \<mu> a d x \<pi>\<^sub>B s \<omega>)
-    obtain \<pi>\<^sub>A s' \<Pi>' where B: "(\<pi>\<^sub>A, s', \<Pi>') = branch_instr_convert (dom \<Pi>) \<pi>\<^sub>B s"
+    obtain \<pi>\<^sub>A s' \<Pi>' where B: "branch_instr_convert (dom \<Pi>) \<pi>\<^sub>B s = (\<pi>\<^sub>A, s', \<Pi>')"
       by (cases "branch_instr_convert (dom \<Pi>) \<pi>\<^sub>B s") simp
-    obtain \<pi>\<^sub>A' s'' where C: "(\<pi>\<^sub>A', s'') = remove_continuations \<pi>\<^sub>A s' \<Pi>'"
+    obtain \<pi>\<^sub>A' s'' where C: "remove_continuations \<pi>\<^sub>A s' \<Pi>' = (\<pi>\<^sub>A', s'')"
       by (cases "remove_continuations \<pi>\<^sub>A s' \<Pi>'") simp
     from B C have A: "state_convert (dom \<Pi>) (\<mu>, a, d, ABAssm x # \<pi>\<^sub>B, s, \<omega>) = 
-        (\<mu>, a, d, AAssm x # \<pi>\<^sub>A', s'', \<omega>)"
-      proof -
-        from B have "state_convert (dom \<Pi>) (\<mu>, a, d, ABAssm x # \<pi>\<^sub>B, s, \<omega>) = (
-          let (\<pi>', s', \<Pi>') = (
-            let (\<pi>', s', \<Pi>) = (\<pi>\<^sub>A, s', \<Pi>')
-            in (AAssm x # \<pi>', s', \<Pi>))
-          in let (\<pi>'', s'') = remove_continuations \<pi>' s' \<Pi>'
-          in (\<mu>, a, d, \<pi>'', s'', \<omega>))" by simp
-        with C have "state_convert (dom \<Pi>) (\<mu>, a, d, ABAssm x # \<pi>\<^sub>B, s, \<omega>) = (
-          let (\<pi>'', s'') = (AAssm x # \<pi>\<^sub>A', s'')
-          in (\<mu>, a, d, \<pi>'', s'', \<omega>))" by simp
-        thus ?thesis by simp
-      qed
-    have "state_convert (dom \<Pi>) (\<mu>, Some x, d, \<pi>\<^sub>B, s, \<omega>) = (\<mu>, Some x, d, \<pi>\<^sub>A', s'', \<omega>)"
-      proof - 
-        from B have "state_convert (dom \<Pi>) (\<mu>, Some x, d, \<pi>\<^sub>B, s, \<omega>) = (
-          let (\<pi>\<^sub>A, s', \<Pi>') = (\<pi>\<^sub>A, s', \<Pi>')
-          in let (\<pi>\<^sub>A', s'') = remove_continuations \<pi>\<^sub>A s' \<Pi>'
-          in (\<mu>, Some x, d, \<pi>\<^sub>A', s'', \<omega>))" by simp
-        with C have "state_convert (dom \<Pi>) (\<mu>, Some x, d, \<pi>\<^sub>B, s, \<omega>) = (
-          let (\<pi>\<^sub>A', s'') = (\<pi>\<^sub>A', s'')
-          in (\<mu>, Some x, d, \<pi>\<^sub>A', s'', \<omega>))" by simp
-        thus ?thesis by simp
-      qed
+      (\<mu>, a, d, AAssm x # \<pi>\<^sub>A', s'', \<omega>)" by simp
+    from B C have "state_convert (dom \<Pi>) (\<mu>, Some x, d, \<pi>\<^sub>B, s, \<omega>) = (\<mu>, Some x, d, \<pi>\<^sub>A', s'', \<omega>)"
+      by simp
     with 2 A show ?case by simp
   next case (3 \<Pi> \<mu> a d dst cmp \<pi>\<^sub>B s \<omega>)
     let ?n = "compute cmp (\<mu> a) a d"
     let ?m = "if M \<in> dst then \<mu>(a := ?n) else \<mu>"
     let ?a = "Some (if A \<in> dst then ?n else a)"
     let ?d = "if D \<in> dst then ?n else d"
-    obtain \<pi>\<^sub>A s' \<Pi>' where B: "(\<pi>\<^sub>A, s', \<Pi>') = branch_instr_convert (dom \<Pi>) \<pi>\<^sub>B s"
+    obtain \<pi>\<^sub>A s' \<Pi>' where B: "branch_instr_convert (dom \<Pi>) \<pi>\<^sub>B s = (\<pi>\<^sub>A, s', \<Pi>')"
       by (cases "branch_instr_convert (dom \<Pi>) \<pi>\<^sub>B s") simp
-    obtain \<pi>\<^sub>A' s'' where C: "(\<pi>\<^sub>A', s'') = remove_continuations \<pi>\<^sub>A s' \<Pi>'" 
+    obtain \<pi>\<^sub>A' s'' where C: "remove_continuations \<pi>\<^sub>A s' \<Pi>' = (\<pi>\<^sub>A', s'')" 
       by (cases "remove_continuations \<pi>\<^sub>A s' \<Pi>'") simp
-    have S: "state_convert (dom \<Pi>) (?m, ?a, ?d, \<pi>\<^sub>B, s, \<omega>) = (?m, ?a, ?d, \<pi>\<^sub>A', s'', \<omega>)" 
-      proof -
-        from B have "state_convert (dom \<Pi>) (?m, ?a, ?d, \<pi>\<^sub>B, s, \<omega>) = (
-          let (\<pi>\<^sub>A, s', \<Pi>') = (\<pi>\<^sub>A, s', \<Pi>')
-          in let (\<pi>'', s'') = remove_continuations \<pi>\<^sub>A s' \<Pi>'
-          in (?m, ?a, ?d, \<pi>'', s'', \<omega>))" by simp
-        with C have "state_convert (dom \<Pi>) (?m, ?a, ?d, \<pi>\<^sub>B, s, \<omega>) = (
-          let (\<pi>\<^sub>A', s'') = (\<pi>\<^sub>A', s'')
-          in (?m, ?a, ?d, \<pi>\<^sub>A', s'', \<omega>))" by simp
-        thus ?thesis by simp
-      qed
-    have "state_convert (dom \<Pi>) (\<mu>, Some a, d, CBAssm dst cmp # \<pi>\<^sub>B, s, \<omega>) = 
-        (\<mu>, Some a, d, CAssm dst cmp # \<pi>\<^sub>A', s'', \<omega>)" 
-      proof -
-        from B have "state_convert (dom \<Pi>) (\<mu>, Some a, d, CBAssm dst cmp # \<pi>\<^sub>B, s, \<omega>) = (
-          let (\<pi>\<^sub>A, s', \<Pi>') = (
-            let (\<pi>', s', \<Pi>) = (\<pi>\<^sub>A, s', \<Pi>')
-            in (CAssm dst cmp # \<pi>', s', \<Pi>))
-          in let (\<pi>'', s'') = remove_continuations \<pi>\<^sub>A s' \<Pi>'
-          in (\<mu>, Some a, d, \<pi>'', s'', \<omega>))" by simp
-        with C have "state_convert (dom \<Pi>) (\<mu>, Some a, d, CBAssm dst cmp # \<pi>\<^sub>B, s, \<omega>) = (
-          let (\<pi>\<^sub>A', s'') = (CAssm dst cmp # \<pi>\<^sub>A', s'')
-          in (\<mu>, Some a, d, \<pi>\<^sub>A', s'', \<omega>))" by simp
-        thus ?thesis by simp
-      qed
+    from B C have S: "state_convert (dom \<Pi>) (?m, ?a, ?d, \<pi>\<^sub>B, s, \<omega>) = (?m, ?a, ?d, \<pi>\<^sub>A', s'', \<omega>)" 
+      by simp
+    from B C have "state_convert (dom \<Pi>) (\<mu>, Some a, d, CBAssm dst cmp # \<pi>\<^sub>B, s, \<omega>) = 
+      (\<mu>, Some a, d, CAssm dst cmp # \<pi>\<^sub>A', s'', \<omega>)" by simp
     with 3 S show ?case by (simp add: Let_def)
   next case 4
     thus ?case by simp
   next case (5 \<Pi> \<mu> a d jmp \<pi>\<^sub>B\<^sub>t \<pi>\<^sub>B\<^sub>f \<pi>\<^sub>B s \<omega>)    
     let ?s\<^sub>e = "new_label (dom \<Pi>)"
-    obtain \<pi>\<^sub>A s' \<Pi>' where B: "(\<pi>\<^sub>A, s', \<Pi>') = branch_instr_convert (dom \<Pi>) \<pi>\<^sub>B s"
-      by (cases "branch_instr_convert (dom \<Pi>) \<pi>\<^sub>B s") simp
-
-have "branch_instr_convert (dom \<Pi>) (IBAssm jmp \<pi>\<^sub>B\<^sub>t \<pi>\<^sub>B\<^sub>f # \<pi>\<^sub>B) s = (
-    let (\<pi>\<^sub>t', s\<^sub>t, \<Pi>\<^sub>1) = branch_instr_convert (dom \<Pi> \<union> {?s\<^sub>e}) \<pi>\<^sub>B\<^sub>t ?s\<^sub>e
-    in let (\<pi>\<^sub>f', s\<^sub>f, \<Pi>\<^sub>2) = branch_instr_convert (dom \<Pi> \<union> dom \<Pi>\<^sub>1 \<union> {?s\<^sub>e}) \<pi>\<^sub>B\<^sub>f ?s\<^sub>e
-    in let (\<pi>', s', \<Pi>\<^sub>3) = branch_instr_convert (dom \<Pi> \<union> dom \<Pi>\<^sub>1 \<union> dom \<Pi>\<^sub>2 \<union> {?s\<^sub>e}) \<pi>\<^sub>B s
-    in (JAssm jmp s\<^sub>t # \<pi>\<^sub>f', s\<^sub>f, \<Pi>\<^sub>1 ++ \<Pi>\<^sub>2 ++ \<Pi>\<^sub>3 ++ [s\<^sub>t \<mapsto> (\<pi>\<^sub>t', s\<^sub>t), ?s\<^sub>e \<mapsto> (\<pi>', s')]))" by (simp add: Let_def)
-
-have "state_convert (dom \<Pi>) (\<mu>, a, d, IBAssm jmp \<pi>\<^sub>B\<^sub>t \<pi>\<^sub>B\<^sub>f # \<pi>\<^sub>B, s, \<omega>) = (
-    let (\<pi>', s', \<Pi>') = branch_instr_convert (dom \<Pi>) (IBAssm jmp \<pi>\<^sub>B\<^sub>t \<pi>\<^sub>B\<^sub>f # \<pi>\<^sub>B) s
-    in let (\<pi>'', s'') = remove_continuations \<pi>' s' \<Pi>'
-    in (\<mu>, a, d, \<pi>'', s'', \<omega>))" by simp
-    
-
-have "state_convert (dom \<Pi>) (\<mu>, a, d, (if should_jump d jmp then \<pi>\<^sub>B\<^sub>t else \<pi>\<^sub>B\<^sub>f) @ \<pi>\<^sub>B, s, \<omega>) = (
-    let (\<pi>', s', \<Pi>') = branch_instr_convert (dom \<Pi>) ((if should_jump d jmp then \<pi>\<^sub>B\<^sub>t else \<pi>\<^sub>B\<^sub>f) @ \<pi>\<^sub>B) s
-    in let (\<pi>'', s'') = remove_continuations \<pi>' s' \<Pi>'
-    in (\<mu>, a, d, \<pi>'', s'', \<omega>))" by simp
-    
+    obtain \<pi>\<^sub>A s' \<Pi>\<^sub>1 where B: "branch_instr_convert (dom \<Pi> \<union> {?s\<^sub>e}) \<pi>\<^sub>B s = (\<pi>\<^sub>A, s', \<Pi>\<^sub>1)" 
+      by (cases "branch_instr_convert (dom \<Pi> \<union> {?s\<^sub>e}) \<pi>\<^sub>B s") simp
+    obtain \<pi>\<^sub>A\<^sub>t s\<^sub>t \<Pi>\<^sub>2 where BT: "branch_instr_convert (dom \<Pi> \<union> dom \<Pi>\<^sub>1 \<union> {?s\<^sub>e}) \<pi>\<^sub>B\<^sub>t ?s\<^sub>e = (\<pi>\<^sub>A\<^sub>t, s\<^sub>t, \<Pi>\<^sub>2)"
+      by (cases "branch_instr_convert (dom \<Pi> \<union> dom \<Pi>\<^sub>1 \<union> {?s\<^sub>e}) \<pi>\<^sub>B\<^sub>t ?s\<^sub>e") simp
+    obtain \<pi>\<^sub>A\<^sub>f s\<^sub>f \<Pi>\<^sub>3 where BF: "branch_instr_convert (dom \<Pi> \<union> dom \<Pi>\<^sub>1 \<union> dom \<Pi>\<^sub>2 \<union> {?s\<^sub>e}) \<pi>\<^sub>B\<^sub>f ?s\<^sub>e = 
+        (\<pi>\<^sub>A\<^sub>f, s\<^sub>f, \<Pi>\<^sub>3)"
+      by (cases "branch_instr_convert (dom \<Pi> \<union> dom \<Pi>\<^sub>1 \<union> dom \<Pi>\<^sub>2 \<union> {?s\<^sub>e}) \<pi>\<^sub>B\<^sub>f ?s\<^sub>e") simp
+    let ?\<Pi>' = "\<Pi>\<^sub>1 ++ \<Pi>\<^sub>2 ++ \<Pi>\<^sub>3 ++ [s\<^sub>t \<mapsto> (\<pi>\<^sub>A\<^sub>t, s\<^sub>t), ?s\<^sub>e \<mapsto> (\<pi>\<^sub>A, s')]"
+    obtain \<pi>\<^sub>A\<^sub>f' s\<^sub>f' where CF: "remove_continuations \<pi>\<^sub>A\<^sub>f s\<^sub>f ?\<Pi>' = (\<pi>\<^sub>A\<^sub>f', s\<^sub>f')"
+      by (cases "remove_continuations \<pi>\<^sub>A\<^sub>f s\<^sub>f ?\<Pi>'") simp
+    from BT BF B have BI: "branch_instr_convert (dom \<Pi>) (IBAssm jmp \<pi>\<^sub>B\<^sub>t \<pi>\<^sub>B\<^sub>f # \<pi>\<^sub>B) s = 
+        (JAssm jmp s\<^sub>t # \<pi>\<^sub>A\<^sub>f, s\<^sub>f, ?\<Pi>')" by simp
+    with CF have SI: "state_convert (dom \<Pi>) (\<mu>, a, d, IBAssm jmp \<pi>\<^sub>B\<^sub>t \<pi>\<^sub>B\<^sub>f # \<pi>\<^sub>B, s, \<omega>) = 
+        (\<mu>, a, d, JAssm jmp s\<^sub>t # \<pi>\<^sub>A\<^sub>f', s\<^sub>f', \<omega>)" by simp
 
 
-    have "eval_assembly (debranch \<Pi>) (state_convert (dom \<Pi>) (\<mu>, a, d, IBAssm jmp \<pi>\<^sub>B\<^sub>t \<pi>\<^sub>B\<^sub>f # \<pi>\<^sub>B, s, \<omega>)) = Some (state_convert (dom \<Pi>) (\<mu>, a, d, (if should_jump d jmp then \<pi>\<^sub>B\<^sub>t else \<pi>\<^sub>B\<^sub>f) @ \<pi>\<^sub>B, s, \<omega>))" by simp
-    with 5 show ?case by simp
+
+
+    have "eval_assembly (debranch \<Pi>) (\<mu>, a, d, JAssm jmp s\<^sub>t # \<pi>\<^sub>A\<^sub>f', s\<^sub>f', \<omega>) = Some (state_convert (dom \<Pi>) (\<mu>, a, d, (if should_jump d jmp then \<pi>\<^sub>B\<^sub>t else \<pi>\<^sub>B\<^sub>f) @ \<pi>\<^sub>B, s, \<omega>))" by simp
+    with 5 SI show ?case by simp
   next case (6 \<Pi> \<mu> a d \<pi>\<^sub>B s \<omega>)
-    obtain \<pi>\<^sub>A s' \<Pi>' where B: "(\<pi>\<^sub>A, s', \<Pi>') = branch_instr_convert (dom \<Pi>) \<pi>\<^sub>B s"
+    obtain \<pi>\<^sub>A s' \<Pi>' where B: "branch_instr_convert (dom \<Pi>) \<pi>\<^sub>B s = (\<pi>\<^sub>A, s', \<Pi>')"
       by (cases "branch_instr_convert (dom \<Pi>) \<pi>\<^sub>B s") simp
-    obtain \<pi>\<^sub>A' s'' where C: "(\<pi>\<^sub>A', s'') = remove_continuations \<pi>\<^sub>A s' \<Pi>'"
+    obtain \<pi>\<^sub>A' s'' where C: "remove_continuations \<pi>\<^sub>A s' \<Pi>' = (\<pi>\<^sub>A', s'')"
       by (cases "remove_continuations \<pi>\<^sub>A s' \<Pi>'") simp
-    hence A: "state_convert (dom \<Pi>) (\<mu>, a, d, PBAssm # \<pi>\<^sub>B, s, \<omega>) = (\<mu>, a, d, PAssm # \<pi>\<^sub>A', s'', \<omega>)"
-      proof -
-        from B have "state_convert (dom \<Pi>) (\<mu>, a, d, PBAssm # \<pi>\<^sub>B, s, \<omega>) = (
-          let (\<pi>', s', \<Pi>') = (
-            let (\<pi>', s', \<Pi>) = (\<pi>\<^sub>A, s', \<Pi>')
-            in (PAssm # \<pi>', s', \<Pi>))
-          in let (\<pi>'', s'') = remove_continuations \<pi>' s' \<Pi>'
-          in (\<mu>, a, d, \<pi>'', s'', \<omega>))" by simp
-        with C have "state_convert (dom \<Pi>) (\<mu>, a, d, PBAssm # \<pi>\<^sub>B, s, \<omega>) = (
-          let (\<pi>'', s'') = (PAssm # \<pi>\<^sub>A', s'')
-          in (\<mu>, a, d, \<pi>'', s'', \<omega>))" by simp
-        thus ?thesis by simp
-      qed
-    have "state_convert (dom \<Pi>) (\<mu>, a, d, \<pi>\<^sub>B, s, d # \<omega>) = (\<mu>, a, d, \<pi>\<^sub>A', s'', d # \<omega>)" 
-      proof - 
-        from B have "state_convert (dom \<Pi>) (\<mu>, a, d, \<pi>\<^sub>B, s, d # \<omega>) = (
-          let (\<pi>\<^sub>A, s', \<Pi>') = (\<pi>\<^sub>A, s', \<Pi>')
-          in let (\<pi>\<^sub>A', s'') = remove_continuations \<pi>\<^sub>A s' \<Pi>'
-          in (\<mu>, a, d, \<pi>\<^sub>A', s'', d # \<omega>))" by simp
-        with C have "state_convert (dom \<Pi>) (\<mu>, a, d, \<pi>\<^sub>B, s, d # \<omega>) = (
-          let (\<pi>\<^sub>A', s'') = (\<pi>\<^sub>A', s'')
-          in (\<mu>, a, d, \<pi>\<^sub>A', s'', d # \<omega>))" by simp
-        thus ?thesis by simp
-      qed
+    from B C have A: "state_convert (dom \<Pi>) (\<mu>, a, d, PBAssm # \<pi>\<^sub>B, s, \<omega>) = 
+      (\<mu>, a, d, PAssm # \<pi>\<^sub>A', s'', \<omega>)" by simp
+    from B C have "state_convert (dom \<Pi>) (\<mu>, a, d, \<pi>\<^sub>B, s, d # \<omega>) = (\<mu>, a, d, \<pi>\<^sub>A', s'', d # \<omega>)" 
+      by simp
     with 6 A show ?case by simp
   qed 
 
