@@ -2,29 +2,26 @@ theory StackToAssembly
 imports FlatStackLanguage "../BranchingAssembly/BranchingAssemblyLanguage" "../Utilities/Iterate"
 begin
 
-definition sp_to_D :: "computation \<Rightarrow> b_assembly list" where
-  "sp_to_D cmp = [CBAssm {A} (Reg M), CBAssm {D} cmp, ABAssm 0]"
+definition pop_to_D :: "computation \<Rightarrow> b_assembly list" where
+  "pop_to_D cmp = [CBAssm {A} (Reg M), CBAssm {D} cmp, ABAssm 0, CBAssm {M} (Decr M)]"
 
-definition D_to_sp :: "b_assembly list" where
-  "D_to_sp = [CBAssm {A} (Reg M), CBAssm {M} (Reg D), ABAssm 0]"
+definition push_from_D :: "b_assembly list" where
+  "push_from_D = [CBAssm {A, M} (Incr M), CBAssm {M} (Reg D), ABAssm 0]"
 
 definition boolify_D :: "comparison \<Rightarrow> b_assembly list" where
   "boolify_D jmp = [IBAssm {jmp} [ABAssm 0, CBAssm {D} One] [ABAssm 0, CBAssm {D} Zero]]"
 
 primrec instruction_conv :: "flat_stack_instruction \<Rightarrow> b_assembly list" where
-  "instruction_conv FAdd = sp_to_D (Reg M) @ [CBAssm {M} (Decr M)] @ sp_to_D DPlusM @ D_to_sp"
-| "instruction_conv FSub = sp_to_D (Reg M) @ [CBAssm {M} (Decr M)] @ sp_to_D MMinusD @ D_to_sp"
-| "instruction_conv FNeg = sp_to_D (NegR M) @ D_to_sp"
-| "instruction_conv FEq = 
-    sp_to_D (Reg M) @ [CBAssm {M} (Decr M)] @ sp_to_D MMinusD @ boolify_D EQ @ D_to_sp"
-| "instruction_conv FGt =
-    sp_to_D (Reg M) @ [CBAssm {M} (Decr M)] @ sp_to_D MMinusD @ boolify_D GT @ D_to_sp"
-| "instruction_conv FLt =
-    sp_to_D (Reg M) @ [CBAssm {M} (Decr M)] @ sp_to_D MMinusD @ boolify_D LT @ D_to_sp"
-| "instruction_conv FAnd = sp_to_D (Reg M) @ [CBAssm {M} (Decr M)] @ sp_to_D DAndM @ D_to_sp"
-| "instruction_conv FOr = sp_to_D (Reg M) @ [CBAssm {M} (Decr M)] @ sp_to_D DOrM @ D_to_sp"
-| "instruction_conv FNot = sp_to_D (NotR M) @ D_to_sp"
-| "instruction_conv FPrint = sp_to_D (Reg M) @ [PBAssm, CBAssm {M} (Decr M)]"
+  "instruction_conv FAdd = pop_to_D (Reg M) @ pop_to_D DPlusM @ push_from_D"
+| "instruction_conv FSub = pop_to_D (Reg M) @ pop_to_D MMinusD @ push_from_D"
+| "instruction_conv FNeg = pop_to_D (NegR M) @ push_from_D"
+| "instruction_conv FEq = pop_to_D (Reg M) @ pop_to_D MMinusD @ boolify_D EQ @ push_from_D"
+| "instruction_conv FGt = pop_to_D (Reg M) @ pop_to_D MMinusD @ boolify_D GT @ push_from_D"
+| "instruction_conv FLt = pop_to_D (Reg M) @ pop_to_D MMinusD @ boolify_D LT @ push_from_D"
+| "instruction_conv FAnd = pop_to_D (Reg M) @ pop_to_D DAndM @ push_from_D"
+| "instruction_conv FOr = pop_to_D (Reg M) @ pop_to_D DOrM @ push_from_D"
+| "instruction_conv FNot = pop_to_D (NotR M) @ push_from_D"
+| "instruction_conv FPrint = pop_to_D (Reg M) @ [PBAssm]"
 
 definition program_convert :: "flat_stack_program \<Rightarrow> b_assembly_program" where
   "program_convert \<Pi> = map_option (\<lambda>(\<pi>, s). (ABAssm 0 # concat (map instruction_conv \<pi>), s)) o \<Pi>"
@@ -86,32 +83,46 @@ lemma [simp]: "(stack_to_mem (i1 # i2 # \<sigma>) \<mu>)(0 := 1 + int (length \<
       by (cases "x > length \<sigma>") (simp_all add: stack_same)
   qed
 
-lemma eval_sp_to_D: "iterate (eval_b_assembly \<Pi>) 
-    (stack_to_mem (i1 # \<sigma>) \<mu>, Some 0, d, sp_to_D cmp @ \<pi>, s, \<omega>) 
-    (stack_to_mem (i1 # \<sigma>) \<mu>, Some 0, compute cmp i1 (1 + int (length \<sigma>)) d, \<pi>, s, \<omega>)"
-  proof (unfold sp_to_D_def)
-    let ?\<mu> = "stack_to_mem (i1 # \<sigma>) \<mu>"
-    let ?\<Sigma>\<^sub>0 = "(?\<mu>, Some 0, d, [CBAssm {A} (Reg M), CBAssm {D} cmp, ABAssm 0] @ \<pi>, s, \<omega>)"
-    let ?\<Sigma>\<^sub>1 = "(?\<mu>, Some (?\<mu> 0), d, [CBAssm {D} cmp, ABAssm 0] @ \<pi>, s, \<omega>)"
-    let ?\<Sigma>\<^sub>2 = "(?\<mu>, Some (?\<mu> 0), compute cmp i1 (1 + int (length \<sigma>)) d, [ABAssm 0] @ \<pi>, s, \<omega>)"
-    let ?\<Sigma>\<^sub>3 = "(?\<mu>, Some 0, compute cmp i1 (1 + int (length \<sigma>)) d, \<pi>, s, \<omega>)"
-    have step1: "eval_b_assembly \<Pi> ?\<Sigma>\<^sub>0 = Some ?\<Sigma>\<^sub>1" by simp
-    have step2: "eval_b_assembly \<Pi> ?\<Sigma>\<^sub>1 = Some ?\<Sigma>\<^sub>2" by auto
-    have "eval_b_assembly \<Pi> ?\<Sigma>\<^sub>2 = Some ?\<Sigma>\<^sub>3" by simp
-    with step1 step2 iter_two iter_prestep show "iterate (eval_b_assembly \<Pi>) ?\<Sigma>\<^sub>0 ?\<Sigma>\<^sub>3" by fast
+lemma [simp]: "(stack_to_mem \<sigma> \<mu>)(0 := int (length \<sigma>) + 1, nat (int (length \<sigma>) + 1) := d) = 
+    stack_to_mem (d # \<sigma>) \<mu>"
+  proof
+    fix x
+    show "((stack_to_mem \<sigma> \<mu>)(0 := int (length \<sigma>) + 1, nat (int (length \<sigma>) + 1) := d)) x = 
+        stack_to_mem (d # \<sigma>) \<mu> x" by auto
   qed
 
-lemma eval_D_to_sp: "iterate (eval_b_assembly \<Pi>) 
-    (stack_to_mem (i1 # \<sigma>) \<mu>, Some 0, d, D_to_sp @ \<pi>, s, \<omega>) 
-    (stack_to_mem (d # \<sigma>) \<mu>, Some 0, d, \<pi>, s, \<omega>)"
-  proof (unfold D_to_sp_def)
-    let ?\<Sigma>\<^sub>0 = "(stack_to_mem (i1 # \<sigma>) \<mu>, Some 0, d, 
-      [CBAssm {A} (Reg M), CBAssm {M} (Reg D), ABAssm 0] @ \<pi>, s, \<omega>)"
-    let ?\<Sigma>\<^sub>1 = "(stack_to_mem (i1 # \<sigma>) \<mu>, Some (1 + int (length \<sigma>)), d, 
-      [CBAssm {M} (Reg D), ABAssm 0] @ \<pi>, s, \<omega>)"
-    let ?\<Sigma>\<^sub>2 = "(stack_to_mem (d # \<sigma>) \<mu>, Some (1 + int (length \<sigma>)), d, [ABAssm 0] @ \<pi>, s, \<omega>)"
-    let ?\<Sigma>\<^sub>3 = "(stack_to_mem (d # \<sigma>) \<mu>, Some 0, d, \<pi>, s, \<omega>)"
+lemma eval_pop_to_D: "iterate (eval_b_assembly \<Pi>) 
+    (stack_to_mem (i1 # \<sigma>) \<mu>, Some 0, d, pop_to_D cmp @ \<pi>, s, \<omega>) 
+    (stack_to_mem \<sigma> (stack_to_mem (i1 # \<sigma>) \<mu>), Some 0, compute cmp i1 (1 + int (length \<sigma>)) d, \<pi>, s, \<omega>)"
+  proof (unfold pop_to_D_def)
+    let ?\<mu> = "stack_to_mem (i1 # \<sigma>) \<mu>"
+    let ?\<Sigma>\<^sub>0 = "(?\<mu>, Some 0, d, 
+      [CBAssm {A} (Reg M), CBAssm {D} cmp, ABAssm 0, CBAssm {M} (Decr M)] @ \<pi>, s, \<omega>)"
+    let ?\<Sigma>\<^sub>1 = "(?\<mu>, Some (?\<mu> 0), d, [CBAssm {D} cmp, ABAssm 0, CBAssm {M} (Decr M)] @ \<pi>, s, \<omega>)"
+    let ?\<Sigma>\<^sub>2 = "(?\<mu>, Some (?\<mu> 0), compute cmp i1 (1 + int (length \<sigma>)) d, 
+      [ABAssm 0, CBAssm {M} (Decr M)] @ \<pi>, s, \<omega>)"
+    let ?\<Sigma>\<^sub>3 = "(?\<mu>, Some 0, compute cmp i1 (1 + int (length \<sigma>)) d, [CBAssm {M} (Decr M)] @ \<pi>, s, \<omega>)"
+    let ?\<Sigma>\<^sub>4 = "(stack_to_mem \<sigma> ?\<mu>, Some 0, compute cmp i1 (1 + int (length \<sigma>)) d, \<pi>, s, \<omega>)"
     have step1: "eval_b_assembly \<Pi> ?\<Sigma>\<^sub>0 = Some ?\<Sigma>\<^sub>1" by simp
+    have "eval_b_assembly \<Pi> ?\<Sigma>\<^sub>1 = Some ?\<Sigma>\<^sub>2" by auto
+    with step1 iter_two have step12: "iterate (eval_b_assembly \<Pi>) ?\<Sigma>\<^sub>0 ?\<Sigma>\<^sub>2" by fast
+    have step3: "eval_b_assembly \<Pi> ?\<Sigma>\<^sub>2 = Some ?\<Sigma>\<^sub>3" by simp
+    have "eval_b_assembly \<Pi> ?\<Sigma>\<^sub>3 = Some ?\<Sigma>\<^sub>4" by simp
+    with step3 iter_two have "iterate (eval_b_assembly \<Pi>) ?\<Sigma>\<^sub>2 ?\<Sigma>\<^sub>4" by fast
+    with step12 show "iterate (eval_b_assembly \<Pi>) ?\<Sigma>\<^sub>0 ?\<Sigma>\<^sub>4" by fast
+  qed
+
+lemma eval_push_from_D: "iterate (eval_b_assembly \<Pi>) 
+    (stack_to_mem \<sigma> \<mu>, Some 0, d, push_from_D @ \<pi>, s, \<omega>) 
+    (stack_to_mem (d # \<sigma>) \<mu>, Some 0, d, \<pi>, s, \<omega>)"
+  proof (unfold push_from_D_def)
+    let ?\<Sigma>\<^sub>0 = "(stack_to_mem \<sigma> \<mu>, Some 0, d, 
+      [CBAssm {A, M} (Incr M), CBAssm {M} (Reg D), ABAssm 0] @ \<pi>, s, \<omega>)"
+    let ?\<Sigma>\<^sub>1 = "((stack_to_mem \<sigma> \<mu>)(0 := int (length \<sigma>) + 1), Some (int (length \<sigma>) + 1), d, 
+      [CBAssm {M} (Reg D), ABAssm 0] @ \<pi>, s, \<omega>)"
+    let ?\<Sigma>\<^sub>2 = "(stack_to_mem (d # \<sigma>) \<mu>, Some (int (length \<sigma>) + 1), d, [ABAssm 0] @ \<pi>, s, \<omega>)"
+    let ?\<Sigma>\<^sub>3 = "(stack_to_mem (d # \<sigma>) \<mu>, Some 0, d, \<pi>, s, \<omega>)"
+    have step1: "eval_b_assembly \<Pi> ?\<Sigma>\<^sub>0 = Some ?\<Sigma>\<^sub>1" by (simp add: Let_def)
     have step2: "eval_b_assembly \<Pi> ?\<Sigma>\<^sub>1 = Some ?\<Sigma>\<^sub>2" by simp
     have "eval_b_assembly \<Pi> ?\<Sigma>\<^sub>2 = Some ?\<Sigma>\<^sub>3" by simp
     with step1 step2 iter_two iter_prestep show "iterate (eval_b_assembly \<Pi>) ?\<Sigma>\<^sub>0 ?\<Sigma>\<^sub>3" by fast
@@ -121,7 +132,8 @@ lemma eval_boolify_D: "iterate (eval_b_assembly \<Pi>)
     (\<sigma>, Some 0, d, boolify_D jmp @ \<pi>, s, \<omega>) 
     (\<sigma>, Some 0, unboolify (compare d {jmp}), \<pi>, s, \<omega>)"
   proof (unfold boolify_D_def)
-    let ?\<Sigma>\<^sub>0 = "(\<sigma>, Some 0, d, [IBAssm {jmp} [ABAssm 0, CBAssm {D} One] [ABAssm 0, CBAssm {D} Zero]] @ \<pi>, s, \<omega>)"
+    let ?\<Sigma>\<^sub>0 = "(\<sigma>, Some 0, d, 
+      [IBAssm {jmp} [ABAssm 0, CBAssm {D} One] [ABAssm 0, CBAssm {D} Zero]] @ \<pi>, s, \<omega>)"
     let ?\<Sigma>\<^sub>1\<^sub>t = "(\<sigma>, None, d, [ABAssm 0, CBAssm {D} One] @ \<pi>, s, \<omega>)"
     let ?\<Sigma>\<^sub>1\<^sub>f = "(\<sigma>, None, d, [ABAssm 0, CBAssm {D} Zero] @ \<pi>, s, \<omega>)"
     let ?\<Sigma>\<^sub>2\<^sub>t = "(\<sigma>, Some 0, d, [CBAssm {D} One] @ \<pi>, s, \<omega>)"
@@ -159,199 +171,182 @@ lemma eval_stack_conv [simp]: "eval_flat_stack \<Pi> \<Sigma>\<^sub>S \<Sigma>\<
   next case (evf_add \<Pi> i1 i2 \<sigma> \<pi> s \<omega>)
     then obtain d \<mu> where S: "\<Sigma>\<^sub>A = 
       (stack_to_mem (i1 # i2 # \<sigma>) \<mu>, Some 0, d, 
-        sp_to_D (Reg M) @ [CBAssm {M} (Decr M)] @ sp_to_D DPlusM @ D_to_sp @ 
-          concat (map instruction_conv \<pi>), s, \<omega>)" by fastforce
+        pop_to_D (Reg M) @ pop_to_D DPlusM @ push_from_D @ concat (map instruction_conv \<pi>), s, \<omega>)" 
+      by fastforce
     let ?\<pi>' = "concat (map instruction_conv \<pi>)"
-    let ?\<mu> = "stack_to_mem (i1 # i2 # \<sigma>) \<mu>"
-    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some 0, i1, [CBAssm {M} (Decr M)] @ sp_to_D DPlusM @ D_to_sp @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, i1, sp_to_D DPlusM @ D_to_sp @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>3 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, i1 + i2, D_to_sp @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>4 = "(stack_to_mem ((i1 + i2) # \<sigma>) ?\<mu>, Some 0, i1 + i2, ?\<pi>', s, \<omega>)"
-    have X: "?\<Sigma>\<^sub>A\<^sub>4 \<in> state_convert ((i1 + i2) # \<sigma>, \<pi>, s, \<omega>)" by auto
-    from S eval_sp_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
+    let ?\<mu> = "stack_to_mem (i2 # \<sigma>) (stack_to_mem (i1 # i2 # \<sigma>) \<mu>)"
+    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some 0, i1, pop_to_D DPlusM @ push_from_D @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem \<sigma> ?\<mu>, Some 0, i1 + i2, push_from_D @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>3 = "(stack_to_mem ((i1 + i2) # \<sigma>) ?\<mu>, Some 0, i1 + i2, ?\<pi>', s, \<omega>)"
+    have X: "?\<Sigma>\<^sub>A\<^sub>3 \<in> state_convert ((i1 + i2) # \<sigma>, \<pi>, s, \<omega>)" by auto
+    from S eval_pop_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
       by fastforce
-    have step2: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>1 = Some ?\<Sigma>\<^sub>A\<^sub>2" by simp
-    from eval_sp_to_D have step3: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>2 ?\<Sigma>\<^sub>A\<^sub>3" 
+    from eval_pop_to_D have step2: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>1 ?\<Sigma>\<^sub>A\<^sub>2" 
       by fastforce
-    from eval_D_to_sp have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>3 ?\<Sigma>\<^sub>A\<^sub>4" by simp
-    with step1 step2 step3 iter_one X show ?case by fast
+    from eval_push_from_D have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>2 ?\<Sigma>\<^sub>A\<^sub>3" by simp
+    with step1 step2 iter_one X show ?case by fast
   next case (evf_sub \<Pi> i1 i2 \<sigma> \<pi> s \<omega>)
     then obtain d \<mu> where S: "\<Sigma>\<^sub>A = 
       (stack_to_mem (i1 # i2 # \<sigma>) \<mu>, Some 0, d, 
-        sp_to_D (Reg M) @ [CBAssm {M} (Decr M)] @ sp_to_D MMinusD @ D_to_sp @ 
-          concat (map instruction_conv \<pi>), s, \<omega>)" by fastforce
+        pop_to_D (Reg M) @ pop_to_D MMinusD @ push_from_D @ concat (map instruction_conv \<pi>), s, \<omega>)" 
+      by fastforce
     let ?\<pi>' = "concat (map instruction_conv \<pi>)"
-    let ?\<mu> = "stack_to_mem (i1 # i2 # \<sigma>) \<mu>"
-    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some 0, i1, [CBAssm {M} (Decr M)] @ sp_to_D MMinusD @ D_to_sp @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, i1, sp_to_D MMinusD @ D_to_sp @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>3 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, i2 - i1, D_to_sp @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>4 = "(stack_to_mem ((i2 - i1) # \<sigma>) ?\<mu>, Some 0, i2 - i1, ?\<pi>', s, \<omega>)"
-    have X: "?\<Sigma>\<^sub>A\<^sub>4 \<in> state_convert ((i2 - i1) # \<sigma>, \<pi>, s, \<omega>)" by auto
-    from S eval_sp_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
+    let ?\<mu> = "stack_to_mem (i2 # \<sigma>) (stack_to_mem (i1 # i2 # \<sigma>) \<mu>)"
+    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some 0, i1, pop_to_D MMinusD @ push_from_D @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem \<sigma> ?\<mu>, Some 0, i2 - i1, push_from_D @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>3 = "(stack_to_mem ((i2 - i1) # \<sigma>) ?\<mu>, Some 0, i2 - i1, ?\<pi>', s, \<omega>)"
+    have X: "?\<Sigma>\<^sub>A\<^sub>3 \<in> state_convert ((i2 - i1) # \<sigma>, \<pi>, s, \<omega>)" by auto
+    from S eval_pop_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
       by fastforce
-    have step2: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>1 = Some ?\<Sigma>\<^sub>A\<^sub>2" by simp
-    from eval_sp_to_D have step3: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>2 ?\<Sigma>\<^sub>A\<^sub>3" 
+    from eval_pop_to_D have step2: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>1 ?\<Sigma>\<^sub>A\<^sub>2" 
       by fastforce
-    from eval_D_to_sp have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>3 ?\<Sigma>\<^sub>A\<^sub>4" by fastforce
-    with step1 step2 step3 iter_one X show ?case by fast
+    from eval_push_from_D have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>2 ?\<Sigma>\<^sub>A\<^sub>3" by simp
+    with step1 step2 iter_one X show ?case by fast
   next case (evf_neg \<Pi> i1 \<sigma> \<pi> s \<omega>)
     then obtain d \<mu> where S: "\<Sigma>\<^sub>A = 
       (stack_to_mem (i1 # \<sigma>) \<mu>, Some 0, d, 
-        sp_to_D (NegR M) @ D_to_sp @ concat (map instruction_conv \<pi>), s, \<omega>)" by fastforce
+        pop_to_D (NegR M) @ push_from_D @ concat (map instruction_conv \<pi>), s, \<omega>)" by fastforce
     let ?\<pi>' = "concat (map instruction_conv \<pi>)"
-    let ?\<Sigma>\<^sub>A\<^sub>1 = "(stack_to_mem (i1 # \<sigma>) \<mu>, Some 0, -i1, D_to_sp @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem (-i1 # \<sigma>) \<mu>, Some 0, -i1, ?\<pi>', s, \<omega>)"
+    let ?\<mu> = "stack_to_mem (i1 # \<sigma>) \<mu>"
+    let ?\<Sigma>\<^sub>A\<^sub>1 = "(stack_to_mem \<sigma> ?\<mu>, Some 0, -i1, push_from_D @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem (-i1 # \<sigma>) ?\<mu>, Some 0, -i1, ?\<pi>', s, \<omega>)"
     have X: "?\<Sigma>\<^sub>A\<^sub>2 \<in> state_convert (-i1 # \<sigma>, \<pi>, s, \<omega>)" by auto
-    from S eval_sp_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
+    from S eval_pop_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
       by fastforce
-    from eval_D_to_sp have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>1 ?\<Sigma>\<^sub>A\<^sub>2" by simp
+    from eval_push_from_D have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>1 ?\<Sigma>\<^sub>A\<^sub>2" by simp
     with step1 X show ?case by fast
   next case (evf_eq \<Pi> i1 i2 \<sigma> \<pi> s \<omega>)
     then obtain d \<mu> where S: "\<Sigma>\<^sub>A = 
       (stack_to_mem (i1 # i2 # \<sigma>) \<mu>, Some 0, d, 
-        sp_to_D (Reg M) @ [CBAssm {M} (Decr M)] @ sp_to_D MMinusD @ boolify_D EQ @ D_to_sp @
+        pop_to_D (Reg M) @ pop_to_D MMinusD @ boolify_D EQ @ push_from_D @
           concat (map instruction_conv \<pi>), s, \<omega>)" by fastforce
     let ?\<pi>' = "concat (map instruction_conv \<pi>)"
-    let ?\<mu> = "stack_to_mem (i1 # i2 # \<sigma>) \<mu>"
+    let ?\<mu> = "stack_to_mem (i2 # \<sigma>) (stack_to_mem (i1 # i2 # \<sigma>) \<mu>)"
     let ?result = "unboolify (i2 = i1)"
-    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some 0, i1, 
-      [CBAssm {M} (Decr M)] @ sp_to_D MMinusD @ boolify_D EQ @ D_to_sp @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, i1, 
-      sp_to_D MMinusD @ boolify_D EQ @ D_to_sp @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>3 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, i2 - i1, boolify_D EQ @ D_to_sp @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>4 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, ?result, D_to_sp @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>5 = "(stack_to_mem (?result # \<sigma>) ?\<mu>, Some 0, ?result, ?\<pi>', s, \<omega>)"
-    have X: "?\<Sigma>\<^sub>A\<^sub>5 \<in> state_convert (?result # \<sigma>, \<pi>, s, \<omega>)" by auto
-    from S eval_sp_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
+    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some 0, i1, pop_to_D MMinusD @ boolify_D EQ @ push_from_D @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem \<sigma> ?\<mu>, Some 0, i2 - i1, boolify_D EQ @ push_from_D @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>3 = "(stack_to_mem \<sigma> ?\<mu>, Some 0, ?result, push_from_D @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>4 = "(stack_to_mem (?result # \<sigma>) ?\<mu>, Some 0, ?result, ?\<pi>', s, \<omega>)"
+    have X: "?\<Sigma>\<^sub>A\<^sub>4 \<in> state_convert (?result # \<sigma>, \<pi>, s, \<omega>)" by auto
+    from S eval_pop_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
       by fastforce
-    have step2: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>1 = Some ?\<Sigma>\<^sub>A\<^sub>2" by simp
-    from eval_sp_to_D have step3: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>2 ?\<Sigma>\<^sub>A\<^sub>3" 
+    from eval_pop_to_D have step2: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>1 ?\<Sigma>\<^sub>A\<^sub>2" 
       by fastforce
-    from eval_boolify_D have step4: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>3 ?\<Sigma>\<^sub>A\<^sub>4" 
+    from eval_boolify_D have step3: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>2 ?\<Sigma>\<^sub>A\<^sub>3" 
       by fastforce
-    from eval_D_to_sp have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>4 ?\<Sigma>\<^sub>A\<^sub>5" by simp
-    with X step1 step2 step3 step4 iter_one show ?case by fast
+    from eval_push_from_D have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>3 ?\<Sigma>\<^sub>A\<^sub>4" by simp
+    with X step1 step2 step3 iter_one show ?case by fast
   next case (evf_gt \<Pi> i1 i2 \<sigma> \<pi> s \<omega>)
     then obtain d \<mu> where S: "\<Sigma>\<^sub>A = 
       (stack_to_mem (i1 # i2 # \<sigma>) \<mu>, Some 0, d, 
-        sp_to_D (Reg M) @ [CBAssm {M} (Decr M)] @ sp_to_D MMinusD @ boolify_D GT @ D_to_sp @
+        pop_to_D (Reg M) @ pop_to_D MMinusD @ boolify_D GT @ push_from_D @
           concat (map instruction_conv \<pi>), s, \<omega>)" by fastforce
     let ?\<pi>' = "concat (map instruction_conv \<pi>)"
-    let ?\<mu> = "stack_to_mem (i1 # i2 # \<sigma>) \<mu>"
+    let ?\<mu> = "stack_to_mem (i2 # \<sigma>) (stack_to_mem (i1 # i2 # \<sigma>) \<mu>)"
     let ?result = "unboolify (i2 > i1)"
-    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some 0, i1,
-      [CBAssm {M} (Decr M)] @ sp_to_D MMinusD @ boolify_D GT @ D_to_sp @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, i1, 
-      sp_to_D MMinusD @ boolify_D GT @ D_to_sp @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>3 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, i2 - i1, boolify_D GT @ D_to_sp @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>4' = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, unboolify (i2 - i1 > 0), D_to_sp @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>4 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, ?result, D_to_sp @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>5 = "(stack_to_mem (?result # \<sigma>) ?\<mu>, Some 0, ?result, ?\<pi>', s, \<omega>)"
-    have X: "?\<Sigma>\<^sub>A\<^sub>5 \<in> state_convert (?result # \<sigma>, \<pi>, s, \<omega>)" by auto
-    from S eval_sp_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
+    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some 0, i1, 
+      pop_to_D MMinusD @ boolify_D GT @ push_from_D @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem \<sigma> ?\<mu>, Some 0, i2 - i1, boolify_D GT @ push_from_D @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>3' = "(stack_to_mem \<sigma> ?\<mu>, Some 0, unboolify (i2 - i1 > 0), push_from_D @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>3 = "(stack_to_mem \<sigma> ?\<mu>, Some 0, ?result, push_from_D @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>4 = "(stack_to_mem (?result # \<sigma>) ?\<mu>, Some 0, ?result, ?\<pi>', s, \<omega>)"
+    have X: "?\<Sigma>\<^sub>A\<^sub>4 \<in> state_convert (?result # \<sigma>, \<pi>, s, \<omega>)" by auto
+    from S eval_pop_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
       by fastforce
-    have step2: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>1 = Some ?\<Sigma>\<^sub>A\<^sub>2" by simp
-    from eval_sp_to_D have step3: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>2 ?\<Sigma>\<^sub>A\<^sub>3" 
+    from eval_pop_to_D have step2: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>1 ?\<Sigma>\<^sub>A\<^sub>2" 
       by fastforce
-    from eval_boolify_D have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>3 ?\<Sigma>\<^sub>A\<^sub>4'" 
+    from eval_boolify_D have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>2 ?\<Sigma>\<^sub>A\<^sub>3'" 
       by fastforce
-    moreover have "?\<Sigma>\<^sub>A\<^sub>4' = ?\<Sigma>\<^sub>A\<^sub>4" by smt
-    ultimately have step4: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>3 ?\<Sigma>\<^sub>A\<^sub>4" by simp
-    from eval_D_to_sp have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>4 ?\<Sigma>\<^sub>A\<^sub>5" by simp
-    with X step1 step2 step3 step4 iter_one show ?case by fast
+    moreover have "?\<Sigma>\<^sub>A\<^sub>3' = ?\<Sigma>\<^sub>A\<^sub>3" by smt
+    ultimately have step3: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>2 ?\<Sigma>\<^sub>A\<^sub>3" by simp
+    from eval_push_from_D have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>3 ?\<Sigma>\<^sub>A\<^sub>4" by simp
+    with X step1 step2 step3 iter_one show ?case by fast
   next case (evf_lt \<Pi> i1 i2 \<sigma> \<pi> s \<omega>)
     then obtain d \<mu> where S: "\<Sigma>\<^sub>A = 
       (stack_to_mem (i1 # i2 # \<sigma>) \<mu>, Some 0, d, 
-        sp_to_D (Reg M) @ [CBAssm {M} (Decr M)] @ sp_to_D MMinusD @ boolify_D LT @ D_to_sp @
+        pop_to_D (Reg M) @ pop_to_D MMinusD @ boolify_D LT @ push_from_D @
           concat (map instruction_conv \<pi>), s, \<omega>)" by fastforce
     let ?\<pi>' = "concat (map instruction_conv \<pi>)"
-    let ?\<mu> = "stack_to_mem (i1 # i2 # \<sigma>) \<mu>"
+    let ?\<mu> = "stack_to_mem (i2 # \<sigma>) (stack_to_mem (i1 # i2 # \<sigma>) \<mu>)"
     let ?result = "unboolify (i2 < i1)"
     let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some 0, i1, 
-      [CBAssm {M} (Decr M)] @ sp_to_D MMinusD @ boolify_D LT @ D_to_sp @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, i1, 
-      sp_to_D MMinusD @ boolify_D LT @ D_to_sp @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>3 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, i2 - i1, boolify_D LT @ D_to_sp @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>4 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, ?result, D_to_sp @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>5 = "(stack_to_mem (?result # \<sigma>) ?\<mu>, Some 0, ?result, ?\<pi>', s, \<omega>)"
-    have X: "?\<Sigma>\<^sub>A\<^sub>5 \<in> state_convert (?result # \<sigma>, \<pi>, s, \<omega>)" by auto
-    from S eval_sp_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
+      pop_to_D MMinusD @ boolify_D LT @ push_from_D @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem \<sigma> ?\<mu>, Some 0, i2 - i1, boolify_D LT @ push_from_D @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>3 = "(stack_to_mem \<sigma> ?\<mu>, Some 0, ?result, push_from_D @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>4 = "(stack_to_mem (?result # \<sigma>) ?\<mu>, Some 0, ?result, ?\<pi>', s, \<omega>)"
+    have X: "?\<Sigma>\<^sub>A\<^sub>4 \<in> state_convert (?result # \<sigma>, \<pi>, s, \<omega>)" by auto
+    from S eval_pop_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
       by fastforce
-    have step2: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>1 = Some ?\<Sigma>\<^sub>A\<^sub>2" by simp
-    from eval_sp_to_D have step3: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>2 ?\<Sigma>\<^sub>A\<^sub>3" 
+    from eval_pop_to_D have step2: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>1 ?\<Sigma>\<^sub>A\<^sub>2" 
       by fastforce
-    from eval_boolify_D have step4: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>3 ?\<Sigma>\<^sub>A\<^sub>4" 
+    from eval_boolify_D have step3: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>2 ?\<Sigma>\<^sub>A\<^sub>3" 
       by fastforce
-    from eval_D_to_sp have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>4 ?\<Sigma>\<^sub>A\<^sub>5" by simp
-    with X step1 step2 step3 step4 iter_one show ?case by fast
+    from eval_push_from_D have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>3 ?\<Sigma>\<^sub>A\<^sub>4" by simp
+    with X step1 step2 step3 iter_one show ?case by fast
   next case (evf_and \<Pi> i1 i2 \<sigma> \<pi> s \<omega>)
     then obtain d \<mu> where S: "\<Sigma>\<^sub>A = 
       (stack_to_mem (i1 # i2 # \<sigma>) \<mu>, Some 0, d, 
-        sp_to_D (Reg M) @ [CBAssm {M} (Decr M)] @ sp_to_D DAndM @ D_to_sp @ 
-          concat (map instruction_conv \<pi>), s, \<omega>)" by fastforce
+        pop_to_D (Reg M) @ pop_to_D DAndM @ push_from_D @ concat (map instruction_conv \<pi>), s, \<omega>)" 
+      by fastforce
     let ?\<pi>' = "concat (map instruction_conv \<pi>)"
-    let ?\<mu> = "stack_to_mem (i1 # i2 # \<sigma>) \<mu>"
+    let ?\<mu> = "stack_to_mem (i2 # \<sigma>) (stack_to_mem (i1 # i2 # \<sigma>) \<mu>)"
     let ?result = "unboolify (boolify i1 \<and> boolify i2)"
-    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some 0, i1, [CBAssm {M} (Decr M)] @ sp_to_D DAndM @ D_to_sp @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, i1, sp_to_D DAndM @ D_to_sp @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>3 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, ?result, D_to_sp @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>4 = "(stack_to_mem (?result # \<sigma>) ?\<mu>, Some 0, ?result, ?\<pi>', s, \<omega>)"
-    have X: "?\<Sigma>\<^sub>A\<^sub>4 \<in> state_convert (?result # \<sigma>, \<pi>, s, \<omega>)" by auto
-    from S eval_sp_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
+    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some 0, i1, pop_to_D DAndM @ push_from_D @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem \<sigma> ?\<mu>, Some 0, ?result, push_from_D @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>3 = "(stack_to_mem (?result # \<sigma>) ?\<mu>, Some 0, ?result, ?\<pi>', s, \<omega>)"
+    have X: "?\<Sigma>\<^sub>A\<^sub>3 \<in> state_convert (?result # \<sigma>, \<pi>, s, \<omega>)" by auto
+    from S eval_pop_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
       by fastforce
-    have step2: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>1 = Some ?\<Sigma>\<^sub>A\<^sub>2" by simp
-    from eval_sp_to_D have step3: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>2 ?\<Sigma>\<^sub>A\<^sub>3" 
+    from eval_pop_to_D have step2: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>1 ?\<Sigma>\<^sub>A\<^sub>2" 
       by fastforce
-    from eval_D_to_sp have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>3 ?\<Sigma>\<^sub>A\<^sub>4" by simp
-    with step1 step2 step3 iter_one X show ?case by fast
+    from eval_push_from_D have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>2 ?\<Sigma>\<^sub>A\<^sub>3" by simp
+    with step1 step2 iter_one X show ?case by fast
   next case (evf_or \<Pi> i1 i2 \<sigma> \<pi> s \<omega>)
     then obtain d \<mu> where S: "\<Sigma>\<^sub>A = 
       (stack_to_mem (i1 # i2 # \<sigma>) \<mu>, Some 0, d, 
-        sp_to_D (Reg M) @ [CBAssm {M} (Decr M)] @ sp_to_D DOrM @ D_to_sp @ 
-          concat (map instruction_conv \<pi>), s, \<omega>)" by fastforce
+        pop_to_D (Reg M) @ pop_to_D DOrM @ push_from_D @ concat (map instruction_conv \<pi>), s, \<omega>)" 
+      by fastforce
     let ?\<pi>' = "concat (map instruction_conv \<pi>)"
-    let ?\<mu> = "stack_to_mem (i1 # i2 # \<sigma>) \<mu>"
+    let ?\<mu> = "stack_to_mem (i2 # \<sigma>) (stack_to_mem (i1 # i2 # \<sigma>) \<mu>)"
     let ?result = "unboolify (boolify i1 \<or> boolify i2)"
-    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some 0, i1, [CBAssm {M} (Decr M)] @ sp_to_D DOrM @ D_to_sp @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, i1, sp_to_D DOrM @ D_to_sp @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>3 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, ?result, D_to_sp @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>4 = "(stack_to_mem (?result # \<sigma>) ?\<mu>, Some 0, ?result, ?\<pi>', s, \<omega>)"
-    have X: "?\<Sigma>\<^sub>A\<^sub>4 \<in> state_convert (?result # \<sigma>, \<pi>, s, \<omega>)" by auto
-    from S eval_sp_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
+    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some 0, i1, pop_to_D DOrM @ push_from_D @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem \<sigma> ?\<mu>, Some 0, ?result, push_from_D @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>3 = "(stack_to_mem (?result # \<sigma>) ?\<mu>, Some 0, ?result, ?\<pi>', s, \<omega>)"
+    have X: "?\<Sigma>\<^sub>A\<^sub>3 \<in> state_convert (?result # \<sigma>, \<pi>, s, \<omega>)" by auto
+    from S eval_pop_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
       by fastforce
-    have step2: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>1 = Some ?\<Sigma>\<^sub>A\<^sub>2" by simp
-    from eval_sp_to_D have step3: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>2 ?\<Sigma>\<^sub>A\<^sub>3" 
+    from eval_pop_to_D have step2: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>1 ?\<Sigma>\<^sub>A\<^sub>2" 
       by fastforce
-    from eval_D_to_sp have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>3 ?\<Sigma>\<^sub>A\<^sub>4" by simp
-    with step1 step2 step3 iter_one X show ?case by fast
+    from eval_push_from_D have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>2 ?\<Sigma>\<^sub>A\<^sub>3" by simp
+    with step1 step2 iter_one X show ?case by fast
   next case (evf_not \<Pi> i1 \<sigma> \<pi> s \<omega>)
     then obtain d \<mu> where S: "\<Sigma>\<^sub>A = 
       (stack_to_mem (i1 # \<sigma>) \<mu>, Some 0, d, 
-        sp_to_D (NotR M) @ D_to_sp @ concat (map instruction_conv \<pi>), s, \<omega>)" by fastforce
+        pop_to_D (NotR M) @ push_from_D @ concat (map instruction_conv \<pi>), s, \<omega>)" by fastforce
     let ?\<pi>' = "concat (map instruction_conv \<pi>)"
+    let ?\<mu> = "stack_to_mem (i1 # \<sigma>) \<mu>"
     let ?result = "unboolify (\<not> boolify i1)"
-    let ?\<Sigma>\<^sub>A\<^sub>1 = "(stack_to_mem (i1 # \<sigma>) \<mu>, Some 0, ?result, D_to_sp @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem (?result # \<sigma>) \<mu>, Some 0, ?result, ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>1 = "(stack_to_mem \<sigma> ?\<mu>, Some 0, ?result, push_from_D @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem (?result # \<sigma>) ?\<mu>, Some 0, ?result, ?\<pi>', s, \<omega>)"
     have X: "?\<Sigma>\<^sub>A\<^sub>2 \<in> state_convert (?result # \<sigma>, \<pi>, s, \<omega>)" by auto
-    from S eval_sp_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
+    from S eval_pop_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
       by fastforce
-    from eval_D_to_sp have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>1 ?\<Sigma>\<^sub>A\<^sub>2" by simp
+    from eval_push_from_D have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>1 ?\<Sigma>\<^sub>A\<^sub>2" by simp
     with step1 X show ?case by fast
   next case (evf_print \<Pi> i1 \<sigma> \<pi> s \<omega>)
     then obtain d \<mu> where S: "\<Sigma>\<^sub>A = 
       (stack_to_mem (i1 # \<sigma>) \<mu>, Some 0, d, 
-        sp_to_D (Reg M) @ [PBAssm, CBAssm {M} (Decr M)] @ concat (map instruction_conv \<pi>), s, \<omega>)" 
+        pop_to_D (Reg M) @ [PBAssm] @ concat (map instruction_conv \<pi>), s, \<omega>)" 
       by fastforce
     let ?\<pi>' = "concat (map instruction_conv \<pi>)"
-    let ?\<Sigma>\<^sub>A\<^sub>1 = "(stack_to_mem (i1 # \<sigma>) \<mu>, Some 0, i1, [PBAssm, CBAssm {M} (Decr M)] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem (i1 # \<sigma>) \<mu>, Some 0, i1, [CBAssm {M} (Decr M)] @ ?\<pi>', s, i1 # \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>3 = "(stack_to_mem \<sigma> (stack_to_mem (i1 # \<sigma>) \<mu>), Some 0, i1, ?\<pi>', s, i1 # \<omega>)"
-    have X: "?\<Sigma>\<^sub>A\<^sub>3 \<in> state_convert (\<sigma>, \<pi>, s, i1 # \<omega>)" by auto
-    from S eval_sp_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
+    let ?\<mu> = "stack_to_mem (i1 # \<sigma>) \<mu>"
+    let ?\<Sigma>\<^sub>A\<^sub>1 = "(stack_to_mem \<sigma> ?\<mu>, Some 0, i1, [PBAssm] @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem \<sigma> ?\<mu>, Some 0, i1, ?\<pi>', s, i1 # \<omega>)"
+    have X: "?\<Sigma>\<^sub>A\<^sub>2 \<in> state_convert (\<sigma>, \<pi>, s, i1 # \<omega>)" by auto
+    from S eval_pop_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
       by fastforce
-    have step2: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>1 = Some ?\<Sigma>\<^sub>A\<^sub>2" by simp
-    have "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>2 = Some ?\<Sigma>\<^sub>A\<^sub>3" by simp
-    with step1 step2 X iter_two show ?case by fast
+    have "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>1 = Some ?\<Sigma>\<^sub>A\<^sub>2" by simp
+    with step1 X iter_one show ?case by fast
   qed
 
 theorem stack_to_assembly_correct [simp]: "iterate_ind (eval_flat_stack \<Pi>) \<Sigma>\<^sub>S \<Sigma>\<^sub>S' \<Longrightarrow> 
