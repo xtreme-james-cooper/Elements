@@ -2,7 +2,7 @@ theory CPU
 imports "../Utilities/BasicComputation"
 begin
 
-type_synonym memory = "int \<Rightarrow> int"
+type_synonym memory = "nat \<Rightarrow> int"
 
 datatype register = A | D | M
 

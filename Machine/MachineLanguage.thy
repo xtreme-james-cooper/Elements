@@ -14,8 +14,8 @@ type_synonym machine_state = "memory \<times> int \<times> int \<times> nat \<ti
 fun eval_instruction :: "machine_instruction \<Rightarrow> machine_state \<Rightarrow> machine_state" where
   "eval_instruction (AInstr x) (\<mu>, a, d, pc, \<omega>) = (\<mu>, x, d, Suc pc, \<omega>)"
 | "eval_instruction (CInstr dst cmp jmp) (\<mu>, a, d, pc, \<omega>) = (
-    let n = compute cmp (\<mu> a) a d
-    in (if M \<in> dst then \<mu>(a := n) else \<mu>, 
+    let n = compute cmp (\<mu> (nat a)) a d
+    in (if M \<in> dst then \<mu>(nat a := n) else \<mu>, 
         if A \<in> dst then n else a, 
         if D \<in> dst then n else d, 
         if should_jump n jmp then nat a else Suc pc,

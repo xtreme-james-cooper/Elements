@@ -238,8 +238,8 @@ lemma eval_assembly_conv [simp]: "domain_distinct \<Pi> \<Longrightarrow> eval_l
       Some (\<mu>, x, d, Suc pc, \<omega>)" by fastforce
     with X S P iter_one show ?case by fast
   next case (3 \<Pi> \<mu> a d dst cmp \<pi> \<omega>)
-    let ?n = "compute cmp (\<mu> a) a d"
-    let ?\<mu> = "if M \<in> dst then \<mu>(a := ?n) else \<mu>"
+    let ?n = "compute cmp (\<mu> (nat a)) a d"
+    let ?\<mu> = "if M \<in> dst then \<mu>(nat a := ?n) else \<mu>"
     let ?a = "if A \<in> dst then ?n else a"
     let ?d = "if D \<in> dst then ?n else d"
     from 3 have S: "\<Sigma>\<^sub>A' = (?\<mu>, Some ?a, ?d, \<pi>, \<omega>)" by (simp add: Let_def)

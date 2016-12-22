@@ -227,8 +227,8 @@ lemma debranch_step: "finite (dom \<Pi>) \<Longrightarrow> eval_b_assembly \<Pi>
       by simp
     with 2 A show ?case by simp
   next case (3 \<Pi> \<mu> a d dst cmp \<pi>\<^sub>B s \<omega>)
-    let ?n = "compute cmp (\<mu> a) a d"
-    let ?m = "if M \<in> dst then \<mu>(a := ?n) else \<mu>"
+    let ?n = "compute cmp (\<mu> (nat a)) a d"
+    let ?m = "if M \<in> dst then \<mu>(nat a := ?n) else \<mu>"
     let ?a = "Some (if A \<in> dst then ?n else a)"
     let ?d = "if D \<in> dst then ?n else d"
     obtain \<pi>\<^sub>A s' \<Pi>' where B: "branch_instr_convert (dom \<Pi>) \<pi>\<^sub>B s = (\<pi>\<^sub>A, s', \<Pi>')"

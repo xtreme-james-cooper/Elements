@@ -20,9 +20,9 @@ fun eval_b_assembly :: "b_assembly_program \<Rightarrow> b_assembly_state \<Righ
     | None \<Rightarrow> None)"
 | "eval_b_assembly \<Pi> (\<mu>, a, d, ABAssm x # \<pi>, s, \<omega>) = Some (\<mu>, Some x, d, \<pi>, s, \<omega>)"
 | "eval_b_assembly \<Pi> (\<mu>, Some a, d, CBAssm dst cmp # \<pi>, s, \<omega>) = (
-    let n = compute cmp (\<mu> a) a d
+    let n = compute cmp (\<mu> (nat a)) a d
     in Some (
-      if M \<in> dst then \<mu>(a := n) else \<mu>, 
+      if M \<in> dst then \<mu>(nat a := n) else \<mu>, 
       Some (if A \<in> dst then n else a), 
       if D \<in> dst then n else d, 
       \<pi>, s, \<omega>))"
