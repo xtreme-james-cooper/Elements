@@ -1,27 +1,27 @@
 theory StackToAssembly
-imports StackLanguage "../BranchingAssembly/BranchingAssemblyLanguage" "../Utilities/Iterate"
+imports FlatStackLanguage "../BranchingAssembly/BranchingAssemblyLanguage" "../Utilities/Iterate"
 begin
 
-primrec instruction_conv :: "stack_instruction \<Rightarrow> b_assembly list" where
-  "instruction_conv Add = [
+primrec instruction_conv :: "flat_stack_instruction \<Rightarrow> b_assembly list" where
+  "instruction_conv FAdd = [
     CBAssm {A} (Reg M), 
     CBAssm {D} (Reg M), 
     ABAssm 0, 
     CBAssm {A, M} (Decr M), 
     CBAssm {M} DPlusM, 
     ABAssm 0]"
-| "instruction_conv Sub = [
+| "instruction_conv FSub = [
     CBAssm {A} (Reg M),
     CBAssm {D} (Reg M), 
     ABAssm 0, 
     CBAssm {A, M} (Decr M), 
     CBAssm {M} MMinusD, 
     ABAssm 0]"
-| "instruction_conv Neg = [
+| "instruction_conv FNeg = [
     CBAssm {A} (Reg M), 
     CBAssm {M} (NegR M), 
     ABAssm 0]"
-| "instruction_conv Eq = [
+| "instruction_conv FEq = [
     CBAssm {A} (Reg M),
     CBAssm {D} (Reg M), 
     ABAssm 0, 
@@ -31,7 +31,7 @@ primrec instruction_conv :: "stack_instruction \<Rightarrow> b_assembly list" wh
       [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} One] 
       [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} Zero],
     ABAssm 0]"
-| "instruction_conv Gt = [
+| "instruction_conv FGt = [
     CBAssm {A} (Reg M),
     CBAssm {D} (Reg M), 
     ABAssm 0, 
@@ -41,7 +41,7 @@ primrec instruction_conv :: "stack_instruction \<Rightarrow> b_assembly list" wh
       [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} One] 
       [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} Zero],
     ABAssm 0]"
-| "instruction_conv Lt = [
+| "instruction_conv FLt = [
     CBAssm {A} (Reg M),
     CBAssm {D} (Reg M), 
     ABAssm 0, 
@@ -51,32 +51,32 @@ primrec instruction_conv :: "stack_instruction \<Rightarrow> b_assembly list" wh
       [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} One] 
       [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} Zero],
     ABAssm 0]"
-| "instruction_conv And = [
+| "instruction_conv FAnd = [
     CBAssm {A} (Reg M), 
     CBAssm {D} (Reg M), 
     ABAssm 0, 
     CBAssm {A, M} (Decr M), 
     CBAssm {M} DAndM, 
     ABAssm 0]"
-| "instruction_conv Or = [
+| "instruction_conv FOr = [
     CBAssm {A} (Reg M), 
     CBAssm {D} (Reg M), 
     ABAssm 0, 
     CBAssm {A, M} (Decr M), 
     CBAssm {M} DOrM, 
     ABAssm 0]"
-| "instruction_conv Not = [
+| "instruction_conv FNot = [
     CBAssm {A} (Reg M), 
     CBAssm {M} (NotR M), 
     ABAssm 0]"
-| "instruction_conv Print = [
+| "instruction_conv FPrint = [
     CBAssm {A} (Reg M), 
     CBAssm {D} (Reg M),
     PBAssm,
     ABAssm 0, 
     CBAssm {M} (Decr M)]"
 
-definition program_convert :: "stack_program \<Rightarrow> b_assembly_program" where
+definition program_convert :: "flat_stack_program \<Rightarrow> b_assembly_program" where
   "program_convert \<Pi> = map_option (\<lambda>(\<pi>, s). (ABAssm 0 # concat (map instruction_conv \<pi>), s)) o \<Pi>"
 
 primrec stack_to_mem :: "int list \<Rightarrow> (int \<Rightarrow> int) \<Rightarrow> int \<Rightarrow> int" where
@@ -86,7 +86,7 @@ primrec stack_to_mem :: "int list \<Rightarrow> (int \<Rightarrow> int) \<Righta
     else if k = 1 + int (length is) then i
     else stack_to_mem is \<mu> k)"
 
-fun state_convert :: "stack_state \<Rightarrow> b_assembly_state set" where
+fun state_convert :: "flat_stack_state \<Rightarrow> b_assembly_state set" where
   "state_convert (\<sigma>, \<pi>, s, \<omega>) = 
     {(stack_to_mem \<sigma> \<mu>, Some 0, d, concat (map instruction_conv \<pi>), s, \<omega>) | d \<mu>. True }"
 
@@ -139,12 +139,12 @@ lemma [simp]: "(stack_to_mem (i2 # i3 # \<sigma>) \<mu>)(0 := 1 + int (length \<
       qed
   qed
 
-lemma [simp]: "\<Sigma>\<^sub>B \<in> state_convert \<Sigma>\<^sub>S \<Longrightarrow> b_assembly_output \<Sigma>\<^sub>B = stack_output \<Sigma>\<^sub>S"
-  by (induction \<Sigma>\<^sub>S rule: stack_output.induct, induction \<Sigma>\<^sub>B rule: b_assembly_output.induct) simp
+lemma [simp]: "\<Sigma>\<^sub>B \<in> state_convert \<Sigma>\<^sub>S \<Longrightarrow> b_assembly_output \<Sigma>\<^sub>B = flat_stack_output \<Sigma>\<^sub>S"
+  by (induction \<Sigma>\<^sub>S rule: flat_stack_output.induct, induction \<Sigma>\<^sub>B rule: b_assembly_output.induct) simp
 
-lemma eval_stack_conv [simp]: "eval_stack \<Pi> \<Sigma>\<^sub>S = Some \<Sigma>\<^sub>S' \<Longrightarrow> \<Sigma>\<^sub>A \<in> state_convert \<Sigma>\<^sub>S \<Longrightarrow> 
+lemma eval_stack_conv [simp]: "eval_flat_stack \<Pi> \<Sigma>\<^sub>S = Some \<Sigma>\<^sub>S' \<Longrightarrow> \<Sigma>\<^sub>A \<in> state_convert \<Sigma>\<^sub>S \<Longrightarrow> 
     \<exists>\<Sigma>\<^sub>A'. \<Sigma>\<^sub>A' \<in> state_convert \<Sigma>\<^sub>S' \<and> iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A \<Sigma>\<^sub>A'"
-  proof (induction \<Pi> \<Sigma>\<^sub>S rule: eval_stack.induct)
+  proof (induction \<Pi> \<Sigma>\<^sub>S rule: eval_flat_stack.induct)
   case (1 \<Pi> \<sigma> s \<omega>)
     then obtain d \<mu> where M: "\<Sigma>\<^sub>A = (stack_to_mem \<sigma> \<mu>, Some 0, d, [], s, \<omega>)" by fastforce
     thus ?case
@@ -612,10 +612,10 @@ lemma eval_stack_conv [simp]: "eval_stack \<Pi> \<Sigma>\<^sub>S = Some \<Sigma>
     with X S M show ?case by metis
   qed simp_all (* clear up autogenerated cases where "eval_stack \<Pi> \<Sigma>\<^sub>S = None" *)
 
-theorem stack_to_assembly_correct [simp]: "iterate (eval_stack \<Pi>) \<Sigma>\<^sub>S \<Sigma>\<^sub>S' \<Longrightarrow> 
+theorem stack_to_assembly_correct [simp]: "iterate (eval_flat_stack \<Pi>) \<Sigma>\<^sub>S \<Sigma>\<^sub>S' \<Longrightarrow> 
   \<Sigma>\<^sub>B \<in> state_convert \<Sigma>\<^sub>S \<Longrightarrow> 
     \<exists>\<Sigma>\<^sub>B'. \<Sigma>\<^sub>B' \<in> state_convert \<Sigma>\<^sub>S' \<and> iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>B \<Sigma>\<^sub>B'"
-  proof (induction "eval_stack \<Pi>" \<Sigma>\<^sub>S \<Sigma>\<^sub>S' arbitrary: \<Sigma>\<^sub>B rule: iterate.induct)
+  proof (induction "eval_flat_stack \<Pi>" \<Sigma>\<^sub>S \<Sigma>\<^sub>S' arbitrary: \<Sigma>\<^sub>B rule: iterate.induct)
   case iter_refl
     thus ?case by fastforce
   next case (iter_step \<Sigma>\<^sub>S \<Sigma>\<^sub>S' \<Sigma>\<^sub>S'')
