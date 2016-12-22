@@ -32,7 +32,7 @@ theorem output_equivalence: "\<Sigma>\<^sub>M \<in> state_convert \<Pi> \<Sigma>
     thus ?thesis by auto
   qed
 
-theorem total_correctness: "finite (dom \<Pi>) \<Longrightarrow> iterate (eval_stack \<Pi>) \<Sigma>\<^sub>S \<Sigma>\<^sub>S' \<Longrightarrow> 
+theorem total_correctness: "finite (dom \<Pi>) \<Longrightarrow> iterate_ind (eval_stack \<Pi>) \<Sigma>\<^sub>S \<Sigma>\<^sub>S' \<Longrightarrow> 
   \<Sigma>\<^sub>M \<in> state_convert \<Pi> \<Sigma>\<^sub>S \<Longrightarrow> 
     \<exists>\<Sigma>\<^sub>M'. \<Sigma>\<^sub>M' \<in> state_convert \<Pi> \<Sigma>\<^sub>S' \<and> iterate (eval_machine (program_convert \<Pi>)) \<Sigma>\<^sub>M \<Sigma>\<^sub>M'"
   proof -
@@ -41,7 +41,7 @@ theorem total_correctness: "finite (dom \<Pi>) \<Longrightarrow> iterate (eval_s
     hence DF: "finite (dom (debranch (StackToAssembly.program_convert (flatten \<Pi>))))" by simp
     hence DL: "domain_distinct (linearize (debranch (StackToAssembly.program_convert (flatten \<Pi>))))" 
       by simp
-    assume ES: "iterate (eval_stack \<Pi>) \<Sigma>\<^sub>S \<Sigma>\<^sub>S'"
+    assume ES: "iterate_ind (eval_stack \<Pi>) \<Sigma>\<^sub>S \<Sigma>\<^sub>S'"
     let ?\<Pi>\<^sub>B = "StackToAssembly.program_convert (flatten \<Pi>)"
     let ?\<Pi>\<^sub>A = "debranch ?\<Pi>\<^sub>B"
     let ?\<Pi>\<^sub>M = "AssemblyToMachine.program_convert (linearize ?\<Pi>\<^sub>A)"

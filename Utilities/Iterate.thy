@@ -6,6 +6,10 @@ inductive iterate :: "('a \<rightharpoonup> 'a) \<Rightarrow> 'a \<Rightarrow> '
   iter_refl [simp]: "iterate f x x"
 | iter_step [simp]: "iterate f x y \<Longrightarrow> f y = Some z \<Longrightarrow> iterate f x z"
 
+inductive iterate_ind :: "('a \<Rightarrow> 'a \<Rightarrow> bool) \<Rightarrow> 'a \<Rightarrow> 'a \<Rightarrow> bool" where 
+  iteri_refl [simp]: "iterate_ind f x x"
+| iteri_step [simp]: "iterate_ind f x y \<Longrightarrow> f y z \<Longrightarrow> iterate_ind f x z"
+
 lemma iter_one: "f x = Some y \<Longrightarrow> iterate f x y"
   proof -
     assume "f x = Some y"

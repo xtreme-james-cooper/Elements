@@ -35,35 +35,24 @@ lemma [simp]: "finite (dom \<Pi>) \<Longrightarrow> finite (dom (flatten \<Pi>))
 lemma [simp]: "\<Pi> s = Some (\<pi>, s') \<Longrightarrow> flatten \<Pi> s = Some (map instruction_convert \<pi>, s')"
   by (simp add: flatten_def)
 
-lemma [simp]: "eval_stack \<Pi> \<Sigma> = Some \<Sigma>' \<Longrightarrow> 
-    eval_flat_stack (flatten \<Pi>) (state_convert \<Sigma>) = Some (state_convert \<Sigma>')"
-  proof (induction \<Pi> \<Sigma> rule: eval_stack.induct)
-  case (1 \<Pi> \<sigma> s \<omega>) 
-    thus ?case by (cases \<Sigma>', cases "\<Pi> s") auto
-  next case 2
-    thus ?case by (cases \<Sigma>') auto
-  next case 3
-    thus ?case by (cases \<Sigma>') auto
-  next case 4
-    thus ?case by (cases \<Sigma>') auto
-  next case 5
-    thus ?case by (cases \<Sigma>') auto
-  next case 6
-    thus ?case by (cases \<Sigma>') auto
-  next case 7
-    thus ?case by (cases \<Sigma>') auto
-  next case 8
-    thus ?case by (cases \<Sigma>') auto
-  next case 9
-    thus ?case by (cases \<Sigma>') auto
-  next case 10
-    thus ?case by (cases \<Sigma>') auto
-  next case 11
-    thus ?case by (cases \<Sigma>') auto
-  qed simp_all
+lemma [simp]: "eval_flat_stack (flatten \<Pi>) (unboolify b1 # unboolify b2 # \<sigma>, FAnd # \<pi>, s, \<omega>) 
+    (unboolify (b2 \<and> b1) # \<sigma>, \<pi>, s, \<omega>)"
+  by (cases b1) (cases b2, (metis boolify_def evf_and unboolify_def)+)+
 
-theorem flattening_correct [simp]: "iterate (eval_stack \<Pi>) \<Sigma> \<Sigma>' \<Longrightarrow>
-    iterate (eval_flat_stack (flatten \<Pi>)) (state_convert \<Sigma>) (state_convert \<Sigma>')"
-  by (induction "eval_stack \<Pi>" \<Sigma> \<Sigma>' rule: iterate.induct) simp_all
+lemma [simp]: "eval_flat_stack (flatten \<Pi>) (unboolify b1 # unboolify b2 # \<sigma>, FOr # \<pi>, s, \<omega>) 
+    (unboolify (b2 \<or> b1) # \<sigma>, \<pi>, s, \<omega>)"
+  by (cases b1) (cases b2, (metis boolify_def evf_or unboolify_def)+)+
+
+lemma [simp]: "eval_flat_stack (flatten \<Pi>) (unboolify b # \<sigma>, FNot # \<pi>, s, \<omega>) 
+    (unboolify (\<not> b) # \<sigma>, \<pi>, s, \<omega>)"
+  by (cases b) (metis boolify_def evf_not unboolify_def)+
+
+lemma [simp]: "eval_stack \<Pi> \<Sigma> \<Sigma>' \<Longrightarrow> 
+    eval_flat_stack (flatten \<Pi>) (state_convert \<Sigma>) (state_convert \<Sigma>')"
+  by (induction \<Pi> \<Sigma> \<Sigma>' rule: eval_stack.induct) simp_all
+
+theorem flattening_correct [simp]: "iterate_ind (eval_stack \<Pi>) \<Sigma> \<Sigma>' \<Longrightarrow>
+    iterate_ind (eval_flat_stack (flatten \<Pi>)) (state_convert \<Sigma>) (state_convert \<Sigma>')"
+  by (induction "eval_stack \<Pi>" \<Sigma> \<Sigma>' rule: iterate_ind.induct) simp_all
 
 end
