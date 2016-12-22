@@ -4,6 +4,7 @@ begin
 
 datatype flat_stack_instruction = 
   FAdd | FSub | FNeg | FEq | FGt | FLt | FAnd | FOr | FNot
+| Dup nat | Upd nat
 | FPrint
 
 type_synonym flat_stack_program = "code_label \<rightharpoonup> flat_stack_instruction list \<times> code_label"
@@ -25,6 +26,10 @@ inductive eval_flat_stack :: "flat_stack_program \<Rightarrow> flat_stack_state 
     (unboolify (boolify i1 \<or> boolify i2) # \<sigma>, \<pi>, s, \<omega>)"
 | evf_not [simp]: "eval_flat_stack \<Pi> (i1 # \<sigma>, FNot # \<pi>, s, \<omega>) 
     (unboolify (\<not> boolify i1) # \<sigma>, \<pi>, s, \<omega>)"
+| evf_dup [simp]: "n < length \<sigma> \<Longrightarrow> eval_flat_stack \<Pi> (\<sigma>, Dup n # \<pi>, s, \<omega>) 
+    (\<sigma> ! n # \<sigma>, \<pi>, s, \<omega>)"
+| evf_upd [simp]: "n < length \<sigma> \<Longrightarrow> eval_flat_stack \<Pi> (i1 # \<sigma>, Upd n # \<pi>, s, \<omega>) 
+    (\<sigma>[n := i1], \<pi>, s, \<omega>)"
 | evf_print [simp]: "eval_flat_stack \<Pi> (i1 # \<sigma>, FPrint # \<pi>, s, \<omega>) (\<sigma>, \<pi>, s, i1 # \<omega>)"
 
 fun flat_stack_output :: "flat_stack_state \<Rightarrow> output" where

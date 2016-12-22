@@ -15,11 +15,6 @@ definition boolify :: "int \<Rightarrow> bool" where
 definition unboolify :: "bool \<Rightarrow> int" where
   "unboolify b = (if b then 1 else 0)"
 
-fun list_update :: "'a list \<Rightarrow> 'a \<Rightarrow> nat \<Rightarrow> 'a list" where
-  "list_update as a' 0 = a' # as"
-| "list_update [] a' (Suc n) = undefined"
-| "list_update (a # as) a' (Suc n) = a # list_update as a' n"
-
 lemma [simp]: "unboolify True = 1"
   by (simp add: unboolify_def)
 

@@ -2,7 +2,7 @@ theory Flattening
 imports StackLanguage "../FlatStack/FlatStackLanguage" "../Utilities/Iterate"
 begin
 
-primrec instruction_convert :: "stack_instruction \<Rightarrow> flat_stack_instruction" where
+fun instruction_convert :: "stack_instruction \<Rightarrow> flat_stack_instruction" where
   "instruction_convert Add = FAdd"
 | "instruction_convert Sub = FSub"
 | "instruction_convert Neg = FNeg"
@@ -12,6 +12,12 @@ primrec instruction_convert :: "stack_instruction \<Rightarrow> flat_stack_instr
 | "instruction_convert And = FAnd"
 | "instruction_convert Or = FOr"
 | "instruction_convert Not = FNot"
+| "instruction_convert (Push (Constant i)) = undefined"
+| "instruction_convert (Push (Local v)) = undefined"
+| "instruction_convert (Push (Argument v)) = undefined"
+| "instruction_convert (Pop (Constant i)) = undefined"
+| "instruction_convert (Pop (Local v)) = undefined"
+| "instruction_convert (Pop (Argument v)) = undefined"
 | "instruction_convert Print = FPrint"
 
 primrec stack_value_convert :: "stack_value \<Rightarrow> int" where
@@ -22,7 +28,7 @@ definition flatten :: "stack_program \<Rightarrow> flat_stack_program" where
   "flatten \<Pi> = map_option (\<lambda>(\<pi>, s). (map instruction_convert \<pi>, s)) o \<Pi>"
 
 fun state_convert :: "stack_state \<Rightarrow> flat_stack_state" where
-  "state_convert (\<sigma>, \<pi>, s, \<omega>) = (map stack_value_convert \<sigma>, map instruction_convert \<pi>, s, \<omega>)"
+  "state_convert (\<sigma>, \<phi>, \<pi>, s, \<omega>) = (map stack_value_convert \<sigma>, map instruction_convert \<pi>, s, \<omega>)"
 
 (* flattening correct *)
 
