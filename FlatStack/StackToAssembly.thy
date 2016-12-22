@@ -2,79 +2,29 @@ theory StackToAssembly
 imports FlatStackLanguage "../BranchingAssembly/BranchingAssemblyLanguage" "../Utilities/Iterate"
 begin
 
+definition sp_to_D :: "computation \<Rightarrow> b_assembly list" where
+  "sp_to_D cmp = [CBAssm {A} (Reg M), CBAssm {D} cmp, ABAssm 0]"
+
+definition D_to_sp :: "b_assembly list" where
+  "D_to_sp = [CBAssm {A} (Reg M), CBAssm {M} (Reg D), ABAssm 0]"
+
+definition boolify_D :: "comparison \<Rightarrow> b_assembly list" where
+  "boolify_D jmp = [IBAssm {jmp} [ABAssm 0, CBAssm {D} One] [ABAssm 0, CBAssm {D} Zero]]"
+
 primrec instruction_conv :: "flat_stack_instruction \<Rightarrow> b_assembly list" where
-  "instruction_conv FAdd = [
-    CBAssm {A} (Reg M), 
-    CBAssm {D} (Reg M), 
-    ABAssm 0, 
-    CBAssm {A, M} (Decr M), 
-    CBAssm {M} DPlusM, 
-    ABAssm 0]"
-| "instruction_conv FSub = [
-    CBAssm {A} (Reg M),
-    CBAssm {D} (Reg M), 
-    ABAssm 0, 
-    CBAssm {A, M} (Decr M), 
-    CBAssm {M} MMinusD, 
-    ABAssm 0]"
-| "instruction_conv FNeg = [
-    CBAssm {A} (Reg M), 
-    CBAssm {M} (NegR M), 
-    ABAssm 0]"
-| "instruction_conv FEq = [
-    CBAssm {A} (Reg M),
-    CBAssm {D} (Reg M), 
-    ABAssm 0, 
-    CBAssm {A, M} (Decr M), 
-    CBAssm {D} MMinusD, 
-    IBAssm {EQ} 
-      [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} One] 
-      [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} Zero],
-    ABAssm 0]"
-| "instruction_conv FGt = [
-    CBAssm {A} (Reg M),
-    CBAssm {D} (Reg M), 
-    ABAssm 0, 
-    CBAssm {A, M} (Decr M), 
-    CBAssm {D} MMinusD, 
-    IBAssm {GT} 
-      [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} One] 
-      [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} Zero],
-    ABAssm 0]"
-| "instruction_conv FLt = [
-    CBAssm {A} (Reg M),
-    CBAssm {D} (Reg M), 
-    ABAssm 0, 
-    CBAssm {A, M} (Decr M), 
-    CBAssm {D} MMinusD, 
-    IBAssm {LT} 
-      [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} One] 
-      [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} Zero],
-    ABAssm 0]"
-| "instruction_conv FAnd = [
-    CBAssm {A} (Reg M), 
-    CBAssm {D} (Reg M), 
-    ABAssm 0, 
-    CBAssm {A, M} (Decr M), 
-    CBAssm {M} DAndM, 
-    ABAssm 0]"
-| "instruction_conv FOr = [
-    CBAssm {A} (Reg M), 
-    CBAssm {D} (Reg M), 
-    ABAssm 0, 
-    CBAssm {A, M} (Decr M), 
-    CBAssm {M} DOrM, 
-    ABAssm 0]"
-| "instruction_conv FNot = [
-    CBAssm {A} (Reg M), 
-    CBAssm {M} (NotR M), 
-    ABAssm 0]"
-| "instruction_conv FPrint = [
-    CBAssm {A} (Reg M), 
-    CBAssm {D} (Reg M),
-    PBAssm,
-    ABAssm 0, 
-    CBAssm {M} (Decr M)]"
+  "instruction_conv FAdd = sp_to_D (Reg M) @ [CBAssm {M} (Decr M)] @ sp_to_D DPlusM @ D_to_sp"
+| "instruction_conv FSub = sp_to_D (Reg M) @ [CBAssm {M} (Decr M)] @ sp_to_D MMinusD @ D_to_sp"
+| "instruction_conv FNeg = sp_to_D (NegR M) @ D_to_sp"
+| "instruction_conv FEq = 
+    sp_to_D (Reg M) @ [CBAssm {M} (Decr M)] @ sp_to_D MMinusD @ boolify_D EQ @ D_to_sp"
+| "instruction_conv FGt =
+    sp_to_D (Reg M) @ [CBAssm {M} (Decr M)] @ sp_to_D MMinusD @ boolify_D GT @ D_to_sp"
+| "instruction_conv FLt =
+    sp_to_D (Reg M) @ [CBAssm {M} (Decr M)] @ sp_to_D MMinusD @ boolify_D LT @ D_to_sp"
+| "instruction_conv FAnd = sp_to_D (Reg M) @ [CBAssm {M} (Decr M)] @ sp_to_D DAndM @ D_to_sp"
+| "instruction_conv FOr = sp_to_D (Reg M) @ [CBAssm {M} (Decr M)] @ sp_to_D DOrM @ D_to_sp"
+| "instruction_conv FNot = sp_to_D (NotR M) @ D_to_sp"
+| "instruction_conv FPrint = sp_to_D (Reg M) @ [PBAssm, CBAssm {M} (Decr M)]"
 
 definition program_convert :: "flat_stack_program \<Rightarrow> b_assembly_program" where
   "program_convert \<Pi> = map_option (\<lambda>(\<pi>, s). (ABAssm 0 # concat (map instruction_conv \<pi>), s)) o \<Pi>"
@@ -92,6 +42,9 @@ fun state_convert :: "flat_stack_state \<Rightarrow> b_assembly_state set" where
 
 (* conversion correctness *)
 
+lemma [simp]: "\<Sigma>\<^sub>B \<in> state_convert \<Sigma>\<^sub>S \<Longrightarrow> b_assembly_output \<Sigma>\<^sub>B = flat_stack_output \<Sigma>\<^sub>S"
+  by (induction \<Sigma>\<^sub>S rule: flat_stack_output.induct, induction \<Sigma>\<^sub>B rule: b_assembly_output.induct) simp
+
 lemma [simp]: "dom (program_convert \<Pi>) = dom \<Pi>"
   by (auto simp add: program_convert_def)
 
@@ -102,14 +55,18 @@ lemma [simp]: "\<Pi> s = Some (\<pi>, s') \<Longrightarrow>
 lemma [simp]: "stack_to_mem \<sigma> \<mu> 0 = int (length \<sigma>)"
   by (induction \<sigma>) simp_all
 
-lemma [simp]: "k < 0 \<Longrightarrow> stack_to_mem \<sigma> \<mu> k = \<mu> k"
-  by (induction \<sigma>) simp_all
-
 lemma stack_same: "k > 0 \<Longrightarrow> k \<le> length \<sigma> \<Longrightarrow> stack_to_mem \<sigma> \<mu> k = stack_to_mem \<sigma> \<mu>' k"
   by (induction \<sigma>) simp_all
 
 lemma [simp]: "k > length \<sigma> \<Longrightarrow> stack_to_mem \<sigma> \<mu> k = \<mu> k"
   by (induction \<sigma>) simp_all
+
+lemma [simp]: "(stack_to_mem (a # \<sigma>) \<mu>)(nat (1 + int (length \<sigma>)) := b) = stack_to_mem (b # \<sigma>) \<mu>"
+  proof
+    fix x
+    show "((stack_to_mem (a # \<sigma>) \<mu>)(nat (1 + int (length \<sigma>)) := b)) x = stack_to_mem (b # \<sigma>) \<mu> x" 
+      by auto
+  qed
 
 lemma [simp]: "(stack_to_mem (i1 # \<sigma>) \<mu>)(0 := int (length \<sigma>)) = 
     stack_to_mem \<sigma> (stack_to_mem (i1 # \<sigma>) \<mu>)"
@@ -117,30 +74,73 @@ lemma [simp]: "(stack_to_mem (i1 # \<sigma>) \<mu>)(0 := int (length \<sigma>)) 
     fix x
     show "((stack_to_mem (i1 # \<sigma>) \<mu>)(0 := int (length \<sigma>))) x = 
         stack_to_mem \<sigma> (stack_to_mem (i1 # \<sigma>) \<mu>) x" 
-      proof (cases "x < 0")
-      case True
-        thus ?thesis by simp
-      next case False
-        with stack_same show ?thesis by (cases "x > length \<sigma>") simp_all
-      qed
+      by (cases "x > length \<sigma>") (simp_all add: stack_same)
   qed
 
-lemma [simp]: "(stack_to_mem (i2 # i3 # \<sigma>) \<mu>)(0 := 1 + int (length \<sigma>), Suc (length \<sigma>) := i1) =
-    stack_to_mem (i1 # \<sigma>) (stack_to_mem (i2 # i3 # \<sigma>) \<mu>)"
+lemma [simp]: "(stack_to_mem (i1 # i2 # \<sigma>) \<mu>)(0 := 1 + int (length \<sigma>)) = 
+    stack_to_mem (i2 # \<sigma>) (stack_to_mem (i1 # i2 # \<sigma>) \<mu>)"
   proof
     fix x
-    show "((stack_to_mem (i2 # i3 # \<sigma>) \<mu>)(0 := 1 + int (length \<sigma>), Suc (length \<sigma>) := i1)) x = 
-        stack_to_mem (i1 # \<sigma>) (stack_to_mem (i2 # i3 # \<sigma>) \<mu>) x" 
-      proof (cases "x < 0")
-      case True
-        thus ?thesis by simp
-      next case False
-        with stack_same show ?thesis by (cases "x > length \<sigma>") simp_all
-      qed
+    show "((stack_to_mem (i1 # i2 # \<sigma>) \<mu>)(0 := 1 + int (length \<sigma>))) x = 
+        stack_to_mem (i2 # \<sigma>) (stack_to_mem (i1 # i2 # \<sigma>) \<mu>) x"
+      by (cases "x > length \<sigma>") (simp_all add: stack_same)
   qed
 
-lemma [simp]: "\<Sigma>\<^sub>B \<in> state_convert \<Sigma>\<^sub>S \<Longrightarrow> b_assembly_output \<Sigma>\<^sub>B = flat_stack_output \<Sigma>\<^sub>S"
-  by (induction \<Sigma>\<^sub>S rule: flat_stack_output.induct, induction \<Sigma>\<^sub>B rule: b_assembly_output.induct) simp
+lemma eval_sp_to_D: "iterate (eval_b_assembly \<Pi>) 
+    (stack_to_mem (i1 # \<sigma>) \<mu>, Some 0, d, sp_to_D cmp @ \<pi>, s, \<omega>) 
+    (stack_to_mem (i1 # \<sigma>) \<mu>, Some 0, compute cmp i1 (1 + int (length \<sigma>)) d, \<pi>, s, \<omega>)"
+  proof (unfold sp_to_D_def)
+    let ?\<mu> = "stack_to_mem (i1 # \<sigma>) \<mu>"
+    let ?\<Sigma>\<^sub>0 = "(?\<mu>, Some 0, d, [CBAssm {A} (Reg M), CBAssm {D} cmp, ABAssm 0] @ \<pi>, s, \<omega>)"
+    let ?\<Sigma>\<^sub>1 = "(?\<mu>, Some (?\<mu> 0), d, [CBAssm {D} cmp, ABAssm 0] @ \<pi>, s, \<omega>)"
+    let ?\<Sigma>\<^sub>2 = "(?\<mu>, Some (?\<mu> 0), compute cmp i1 (1 + int (length \<sigma>)) d, [ABAssm 0] @ \<pi>, s, \<omega>)"
+    let ?\<Sigma>\<^sub>3 = "(?\<mu>, Some 0, compute cmp i1 (1 + int (length \<sigma>)) d, \<pi>, s, \<omega>)"
+    have step1: "eval_b_assembly \<Pi> ?\<Sigma>\<^sub>0 = Some ?\<Sigma>\<^sub>1" by simp
+    have step2: "eval_b_assembly \<Pi> ?\<Sigma>\<^sub>1 = Some ?\<Sigma>\<^sub>2" by auto
+    have "eval_b_assembly \<Pi> ?\<Sigma>\<^sub>2 = Some ?\<Sigma>\<^sub>3" by simp
+    with step1 step2 iter_two iter_prestep show "iterate (eval_b_assembly \<Pi>) ?\<Sigma>\<^sub>0 ?\<Sigma>\<^sub>3" by fast
+  qed
+
+lemma eval_D_to_sp: "iterate (eval_b_assembly \<Pi>) 
+    (stack_to_mem (i1 # \<sigma>) \<mu>, Some 0, d, D_to_sp @ \<pi>, s, \<omega>) 
+    (stack_to_mem (d # \<sigma>) \<mu>, Some 0, d, \<pi>, s, \<omega>)"
+  proof (unfold D_to_sp_def)
+    let ?\<Sigma>\<^sub>0 = "(stack_to_mem (i1 # \<sigma>) \<mu>, Some 0, d, 
+      [CBAssm {A} (Reg M), CBAssm {M} (Reg D), ABAssm 0] @ \<pi>, s, \<omega>)"
+    let ?\<Sigma>\<^sub>1 = "(stack_to_mem (i1 # \<sigma>) \<mu>, Some (1 + int (length \<sigma>)), d, 
+      [CBAssm {M} (Reg D), ABAssm 0] @ \<pi>, s, \<omega>)"
+    let ?\<Sigma>\<^sub>2 = "(stack_to_mem (d # \<sigma>) \<mu>, Some (1 + int (length \<sigma>)), d, [ABAssm 0] @ \<pi>, s, \<omega>)"
+    let ?\<Sigma>\<^sub>3 = "(stack_to_mem (d # \<sigma>) \<mu>, Some 0, d, \<pi>, s, \<omega>)"
+    have step1: "eval_b_assembly \<Pi> ?\<Sigma>\<^sub>0 = Some ?\<Sigma>\<^sub>1" by simp
+    have step2: "eval_b_assembly \<Pi> ?\<Sigma>\<^sub>1 = Some ?\<Sigma>\<^sub>2" by simp
+    have "eval_b_assembly \<Pi> ?\<Sigma>\<^sub>2 = Some ?\<Sigma>\<^sub>3" by simp
+    with step1 step2 iter_two iter_prestep show "iterate (eval_b_assembly \<Pi>) ?\<Sigma>\<^sub>0 ?\<Sigma>\<^sub>3" by fast
+  qed
+
+lemma eval_boolify_D: "iterate (eval_b_assembly \<Pi>) 
+    (\<sigma>, Some 0, d, boolify_D jmp @ \<pi>, s, \<omega>) 
+    (\<sigma>, Some 0, unboolify (compare d {jmp}), \<pi>, s, \<omega>)"
+  proof (unfold boolify_D_def)
+    let ?\<Sigma>\<^sub>0 = "(\<sigma>, Some 0, d, [IBAssm {jmp} [ABAssm 0, CBAssm {D} One] [ABAssm 0, CBAssm {D} Zero]] @ \<pi>, s, \<omega>)"
+    let ?\<Sigma>\<^sub>1\<^sub>t = "(\<sigma>, None, d, [ABAssm 0, CBAssm {D} One] @ \<pi>, s, \<omega>)"
+    let ?\<Sigma>\<^sub>1\<^sub>f = "(\<sigma>, None, d, [ABAssm 0, CBAssm {D} Zero] @ \<pi>, s, \<omega>)"
+    let ?\<Sigma>\<^sub>2\<^sub>t = "(\<sigma>, Some 0, d, [CBAssm {D} One] @ \<pi>, s, \<omega>)"
+    let ?\<Sigma>\<^sub>2\<^sub>f = "(\<sigma>, Some 0, d, [CBAssm {D} Zero] @ \<pi>, s, \<omega>)"
+    let ?\<Sigma>\<^sub>3 = "(\<sigma>, Some 0, unboolify (compare d {jmp}), \<pi>, s, \<omega>)"
+    show "iterate (eval_b_assembly \<Pi>) ?\<Sigma>\<^sub>0 ?\<Sigma>\<^sub>3"
+      proof (cases "compare d {jmp}")
+      case True
+        hence step1: "eval_b_assembly \<Pi> ?\<Sigma>\<^sub>0 = Some ?\<Sigma>\<^sub>1\<^sub>t" by simp
+        have step2: "eval_b_assembly \<Pi> ?\<Sigma>\<^sub>1\<^sub>t = Some ?\<Sigma>\<^sub>2\<^sub>t" by simp
+        from True have "eval_b_assembly \<Pi> ?\<Sigma>\<^sub>2\<^sub>t = Some ?\<Sigma>\<^sub>3" by simp
+        with step1 step2 iter_two iter_prestep show ?thesis by fast
+      next case False
+        hence step1: "eval_b_assembly \<Pi> ?\<Sigma>\<^sub>0 = Some ?\<Sigma>\<^sub>1\<^sub>f" by simp
+        have step2: "eval_b_assembly \<Pi> ?\<Sigma>\<^sub>1\<^sub>f = Some ?\<Sigma>\<^sub>2\<^sub>f" by simp
+        from False have "eval_b_assembly \<Pi> ?\<Sigma>\<^sub>2\<^sub>f = Some ?\<Sigma>\<^sub>3" by auto
+        with step1 step2 iter_two iter_prestep show ?thesis by fast
+      qed
+  qed
 
 lemma eval_stack_conv [simp]: "eval_flat_stack \<Pi> \<Sigma>\<^sub>S \<Sigma>\<^sub>S' \<Longrightarrow> \<Sigma>\<^sub>A \<in> state_convert \<Sigma>\<^sub>S \<Longrightarrow> 
     \<exists>\<Sigma>\<^sub>A'. \<Sigma>\<^sub>A' \<in> state_convert \<Sigma>\<^sub>S' \<and> iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A \<Sigma>\<^sub>A'"
@@ -157,437 +157,201 @@ lemma eval_stack_conv [simp]: "eval_flat_stack \<Pi> \<Sigma>\<^sub>S \<Sigma>\<
         Some (stack_to_mem \<sigma> \<mu>, Some 0, d, ?\<pi>', s', \<omega>)" by simp
     with X Y M iter_two show ?case by metis
   next case (evf_add \<Pi> i1 i2 \<sigma> \<pi> s \<omega>)
+    then obtain d \<mu> where S: "\<Sigma>\<^sub>A = 
+      (stack_to_mem (i1 # i2 # \<sigma>) \<mu>, Some 0, d, 
+        sp_to_D (Reg M) @ [CBAssm {M} (Decr M)] @ sp_to_D DPlusM @ D_to_sp @ 
+          concat (map instruction_conv \<pi>), s, \<omega>)" by fastforce
     let ?\<pi>' = "concat (map instruction_conv \<pi>)"
-    from evf_add obtain d \<mu> where M: "\<Sigma>\<^sub>A = (stack_to_mem (i1 # i2 # \<sigma>) \<mu>, Some 0, d, 
-      [CBAssm {A} (Reg M), CBAssm {D} (Reg M), ABAssm 0, 
-       CBAssm {A, M} (Decr M), CBAssm {M} DPlusM, ABAssm 0] @ ?\<pi>', s, \<omega>)" by fastforce
     let ?\<mu> = "stack_to_mem (i1 # i2 # \<sigma>) \<mu>"
-    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some (?\<mu> 0), d, 
-      [CBAssm {D} (Reg M), ABAssm 0, CBAssm {A, M} (Decr M), 
-       CBAssm {M} DPlusM, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>2 = "(?\<mu>, Some (?\<mu> 0), ?\<mu> (nat (?\<mu> 0)), 
-      [ABAssm 0, CBAssm {A, M} (Decr M), CBAssm {M} DPlusM, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>3 = "(?\<mu>, Some 0, ?\<mu> (nat (?\<mu> 0)), 
-      [CBAssm {A, M} (Decr M), CBAssm {M} DPlusM, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>4 = "(?\<mu>(0 := ?\<mu> 0 - 1), Some (?\<mu> 0 - 1), ?\<mu> (nat (?\<mu> 0)), 
-      [CBAssm {M} DPlusM, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>5 = "(stack_to_mem ((i1 + i2) # \<sigma>) ?\<mu>, Some (?\<mu> 0 - 1), ?\<mu> (nat (?\<mu> 0)), 
-      [ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>6 = "(stack_to_mem ((i1 + i2) # \<sigma>) ?\<mu>, Some 0, ?\<mu> (nat (?\<mu> 0)), ?\<pi>', s, \<omega>)"
-    from M have step1: "eval_b_assembly (program_convert \<Pi>) \<Sigma>\<^sub>A = Some ?\<Sigma>\<^sub>A\<^sub>1" by simp
+    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some 0, i1, [CBAssm {M} (Decr M)] @ sp_to_D DPlusM @ D_to_sp @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, i1, sp_to_D DPlusM @ D_to_sp @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>3 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, i1 + i2, D_to_sp @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>4 = "(stack_to_mem ((i1 + i2) # \<sigma>) ?\<mu>, Some 0, i1 + i2, ?\<pi>', s, \<omega>)"
+    have X: "?\<Sigma>\<^sub>A\<^sub>4 \<in> state_convert ((i1 + i2) # \<sigma>, \<pi>, s, \<omega>)" by auto
+    from S eval_sp_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
+      by fastforce
     have step2: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>1 = Some ?\<Sigma>\<^sub>A\<^sub>2" by simp
-    have step3: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>2 = Some ?\<Sigma>\<^sub>A\<^sub>3" by simp
-    have step4: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>3 = Some ?\<Sigma>\<^sub>A\<^sub>4" by (simp add: Let_def)
-    have step5: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>4 = Some ?\<Sigma>\<^sub>A\<^sub>5" by simp
-    have step6: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>5 = Some ?\<Sigma>\<^sub>A\<^sub>6" by simp
-    from iter_two iter_prestep step1 step2 step3 have
-      "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>3" by fast
-    moreover from iter_two iter_prestep step4 step5 step6 have
-      "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>3 ?\<Sigma>\<^sub>A\<^sub>6" by fast
-    ultimately have X: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>6" by fast
-    have "?\<Sigma>\<^sub>A\<^sub>6 \<in> state_convert ((i2 + i1) # \<sigma>, \<pi>, s, \<omega>)" by fastforce
-    with X show ?case by metis
+    from eval_sp_to_D have step3: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>2 ?\<Sigma>\<^sub>A\<^sub>3" 
+      by fastforce
+    from eval_D_to_sp have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>3 ?\<Sigma>\<^sub>A\<^sub>4" by simp
+    with step1 step2 step3 iter_one X show ?case by fast
   next case (evf_sub \<Pi> i1 i2 \<sigma> \<pi> s \<omega>)
+    then obtain d \<mu> where S: "\<Sigma>\<^sub>A = 
+      (stack_to_mem (i1 # i2 # \<sigma>) \<mu>, Some 0, d, 
+        sp_to_D (Reg M) @ [CBAssm {M} (Decr M)] @ sp_to_D MMinusD @ D_to_sp @ 
+          concat (map instruction_conv \<pi>), s, \<omega>)" by fastforce
     let ?\<pi>' = "concat (map instruction_conv \<pi>)"
-    from evf_sub obtain d \<mu> where M: "\<Sigma>\<^sub>A = (stack_to_mem (i1 # i2 # \<sigma>) \<mu>, Some 0, d, 
-      [CBAssm {A} (Reg M), CBAssm {D} (Reg M), ABAssm 0, 
-       CBAssm {A, M} (Decr M), CBAssm {M} MMinusD, ABAssm 0] @ ?\<pi>', s, \<omega>)" by fastforce
     let ?\<mu> = "stack_to_mem (i1 # i2 # \<sigma>) \<mu>"
-    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some (?\<mu> 0), d, 
-      [CBAssm {D} (Reg M), ABAssm 0, 
-       CBAssm {A, M} (Decr M), CBAssm {M} MMinusD, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>2 = "(?\<mu>, Some (?\<mu> 0), ?\<mu> (nat (?\<mu> 0)), 
-      [ABAssm 0, CBAssm {A, M} (Decr M), CBAssm {M} MMinusD, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>3 = "(?\<mu>, Some 0, ?\<mu> (nat (?\<mu> 0)), 
-      [CBAssm {A, M} (Decr M), CBAssm {M} MMinusD, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>4 = "(?\<mu>(0 := ?\<mu> 0 - 1), Some (?\<mu> 0 - 1), ?\<mu> (nat (?\<mu> 0)),
-      [CBAssm {M} MMinusD, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>5 = "(stack_to_mem ((i2 - i1) # \<sigma>) ?\<mu>, Some (?\<mu> 0 - 1), ?\<mu> (nat (?\<mu> 0)), 
-      [ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>6 = "(stack_to_mem ((i2 - i1) # \<sigma>) ?\<mu>, Some 0, ?\<mu> (nat (?\<mu> 0)), ?\<pi>', s, \<omega>)"
-    from M have step1: "eval_b_assembly (program_convert \<Pi>) \<Sigma>\<^sub>A = Some ?\<Sigma>\<^sub>A\<^sub>1" by simp
+    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some 0, i1, [CBAssm {M} (Decr M)] @ sp_to_D MMinusD @ D_to_sp @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, i1, sp_to_D MMinusD @ D_to_sp @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>3 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, i2 - i1, D_to_sp @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>4 = "(stack_to_mem ((i2 - i1) # \<sigma>) ?\<mu>, Some 0, i2 - i1, ?\<pi>', s, \<omega>)"
+    have X: "?\<Sigma>\<^sub>A\<^sub>4 \<in> state_convert ((i2 - i1) # \<sigma>, \<pi>, s, \<omega>)" by auto
+    from S eval_sp_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
+      by fastforce
     have step2: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>1 = Some ?\<Sigma>\<^sub>A\<^sub>2" by simp
-    have step3: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>2 = Some ?\<Sigma>\<^sub>A\<^sub>3" by simp
-    have step4: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>3 = Some ?\<Sigma>\<^sub>A\<^sub>4" by (simp add: Let_def)
-    have step5: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>4 = Some ?\<Sigma>\<^sub>A\<^sub>5" by simp
-    have step6: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>5 = Some ?\<Sigma>\<^sub>A\<^sub>6" by simp
-    from iter_two iter_prestep step1 step2 step3 have
-      "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>3" by fast
-    moreover from iter_two iter_prestep step4 step5 step6 have
-      "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>3 ?\<Sigma>\<^sub>A\<^sub>6" by fast
-    ultimately have X: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>6" by fast
-    have "?\<Sigma>\<^sub>A\<^sub>6 \<in> state_convert ((i2 - i1) # \<sigma>, \<pi>, s, \<omega>)" by auto
-    with X show ?case by metis
+    from eval_sp_to_D have step3: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>2 ?\<Sigma>\<^sub>A\<^sub>3" 
+      by fastforce
+    from eval_D_to_sp have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>3 ?\<Sigma>\<^sub>A\<^sub>4" by fastforce
+    with step1 step2 step3 iter_one X show ?case by fast
   next case (evf_neg \<Pi> i1 \<sigma> \<pi> s \<omega>)
+    then obtain d \<mu> where S: "\<Sigma>\<^sub>A = 
+      (stack_to_mem (i1 # \<sigma>) \<mu>, Some 0, d, 
+        sp_to_D (NegR M) @ D_to_sp @ concat (map instruction_conv \<pi>), s, \<omega>)" by fastforce
     let ?\<pi>' = "concat (map instruction_conv \<pi>)"
-    from evf_neg obtain d \<mu> where M: "\<Sigma>\<^sub>A = (stack_to_mem (i1 # \<sigma>) \<mu>, Some 0, d, 
-      [CBAssm {A} (Reg M), CBAssm {M} (NegR M), ABAssm 0] @ ?\<pi>', s, \<omega>)" by fastforce
-    let ?\<mu> = "stack_to_mem (i1 # \<sigma>) \<mu>"
-    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some (?\<mu> 0), d, [CBAssm {M} (NegR M), ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>2 = "(?\<mu>(nat (?\<mu> 0) := - ?\<mu> (nat (?\<mu> 0))), Some (?\<mu> 0), d, [ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>3 = "(?\<mu>(nat (?\<mu> 0) := - ?\<mu> (nat (?\<mu> 0))), Some 0, d, ?\<pi>', s, \<omega>)"
-    from M have step1: "eval_b_assembly (program_convert \<Pi>) \<Sigma>\<^sub>A = Some ?\<Sigma>\<^sub>A\<^sub>1" by simp
-    have step2: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>1 = Some ?\<Sigma>\<^sub>A\<^sub>2" by simp
-    have "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>2 = Some ?\<Sigma>\<^sub>A\<^sub>3" by simp
-    with iter_two iter_prestep step1 step2 have X:
-      "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>3" by fast
-    have "(stack_to_mem (i1 # \<sigma>) \<mu>)(1 + Suc (length \<sigma>) := - i1) = stack_to_mem (- i1 # \<sigma>) \<mu>" by auto
-    hence "?\<Sigma>\<^sub>A\<^sub>3 \<in> state_convert ((-i1) # \<sigma>, \<pi>, s, \<omega>)" by auto
-    with X show ?case by metis
+    let ?\<Sigma>\<^sub>A\<^sub>1 = "(stack_to_mem (i1 # \<sigma>) \<mu>, Some 0, -i1, D_to_sp @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem (-i1 # \<sigma>) \<mu>, Some 0, -i1, ?\<pi>', s, \<omega>)"
+    have X: "?\<Sigma>\<^sub>A\<^sub>2 \<in> state_convert (-i1 # \<sigma>, \<pi>, s, \<omega>)" by auto
+    from S eval_sp_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
+      by fastforce
+    from eval_D_to_sp have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>1 ?\<Sigma>\<^sub>A\<^sub>2" by simp
+    with step1 X show ?case by fast
   next case (evf_eq \<Pi> i1 i2 \<sigma> \<pi> s \<omega>)
+    then obtain d \<mu> where S: "\<Sigma>\<^sub>A = 
+      (stack_to_mem (i1 # i2 # \<sigma>) \<mu>, Some 0, d, 
+        sp_to_D (Reg M) @ [CBAssm {M} (Decr M)] @ sp_to_D MMinusD @ boolify_D EQ @ D_to_sp @
+          concat (map instruction_conv \<pi>), s, \<omega>)" by fastforce
     let ?\<pi>' = "concat (map instruction_conv \<pi>)"
-    from evf_eq obtain d \<mu> where M: "\<Sigma>\<^sub>A = (stack_to_mem (i1 # i2 # \<sigma>) \<mu>, Some 0, d, 
-      [CBAssm {A} (Reg M), CBAssm {D} (Reg M), ABAssm 0, 
-       CBAssm {A, M} (Decr M), CBAssm {D} MMinusD, 
-       IBAssm {EQ} [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} One] 
-                   [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} Zero], ABAssm 0] @ ?\<pi>', s, \<omega>)" 
-      by fastforce
     let ?\<mu> = "stack_to_mem (i1 # i2 # \<sigma>) \<mu>"
-    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some (?\<mu> 0), d, 
-      [CBAssm {D} (Reg M), ABAssm 0, CBAssm {A, M} (Decr M), CBAssm {D} MMinusD, 
-       IBAssm {EQ} [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} One] 
-                   [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} Zero], ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>2 = "(?\<mu>, Some (?\<mu> 0), ?\<mu> (nat (?\<mu> 0)), 
-      [ABAssm 0, CBAssm {A, M} (Decr M), CBAssm {D} MMinusD, 
-       IBAssm {EQ} [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} One] 
-                   [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} Zero], ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>3 = "(?\<mu>, Some 0, ?\<mu> (nat (?\<mu> 0)), 
-      [CBAssm {A, M} (Decr M), CBAssm {D} MMinusD, 
-       IBAssm {EQ} [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} One] 
-                   [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} Zero], ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>4 = "(?\<mu>(0 := ?\<mu> 0 - 1), Some (?\<mu> 0 - 1), ?\<mu> (nat (?\<mu> 0)), 
-      [CBAssm {D} MMinusD, IBAssm {EQ} [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} One] 
-        [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} Zero], ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>5 = "(?\<mu>(0 := ?\<mu> 0 - 1), Some (?\<mu> 0 - 1), ?\<mu> (nat (?\<mu> 0 - 1)) - ?\<mu> (nat (?\<mu> 0)), 
-      [IBAssm {EQ} [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} One] 
-                   [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} Zero], ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>6\<^sub>t = "(?\<mu>(0 := ?\<mu> 0 - 1), None, ?\<mu> (nat (?\<mu> 0 - 1)) - ?\<mu> (nat (?\<mu> 0)), 
-      [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} One, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>7\<^sub>t = "(?\<mu>(0 := ?\<mu> 0 - 1), Some 0, ?\<mu> (nat (?\<mu> 0 - 1)) - ?\<mu> (nat (?\<mu> 0)), 
-      [CBAssm {A} (Reg M), CBAssm {M} One, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>8\<^sub>t = "(?\<mu>(0 := ?\<mu> 0 - 1), Some (?\<mu> 0 - 1), ?\<mu> (nat (?\<mu> 0 - 1)) - ?\<mu> (nat (?\<mu> 0)), 
-      [CBAssm {M} One, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>6\<^sub>f = "(?\<mu>(0 := ?\<mu> 0 - 1), None, ?\<mu> (nat (?\<mu> 0 - 1)) - ?\<mu> (nat (?\<mu> 0)), 
-      [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} Zero, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>7\<^sub>f = "(?\<mu>(0 := ?\<mu> 0 - 1), Some 0, ?\<mu> (nat (?\<mu> 0 - 1)) - ?\<mu> (nat (?\<mu> 0)), 
-      [CBAssm {A} (Reg M), CBAssm {M} Zero, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>8\<^sub>f = "(?\<mu>(0 := ?\<mu> 0 - 1), Some (?\<mu> 0 - 1), ?\<mu> (nat (?\<mu> 0 - 1)) - ?\<mu> (nat (?\<mu> 0)), 
-      [CBAssm {M} Zero, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>9 = "(stack_to_mem (unboolify (i2 = i1) # \<sigma>) ?\<mu>, Some (?\<mu> 0 - 1), 
-      ?\<mu> (nat (?\<mu> 0 - 1)) - ?\<mu> (nat (?\<mu> 0)), [ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>1\<^sub>0 = "(stack_to_mem (unboolify (i2 = i1) # \<sigma>) ?\<mu>, Some 0, 
-      ?\<mu> (nat (?\<mu> 0 - 1)) - ?\<mu> (nat (?\<mu> 0)), ?\<pi>', s, \<omega>)"
-    from M have step1: "eval_b_assembly (program_convert \<Pi>) \<Sigma>\<^sub>A = Some ?\<Sigma>\<^sub>A\<^sub>1" by simp
+    let ?result = "unboolify (i2 = i1)"
+    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some 0, i1, 
+      [CBAssm {M} (Decr M)] @ sp_to_D MMinusD @ boolify_D EQ @ D_to_sp @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, i1, 
+      sp_to_D MMinusD @ boolify_D EQ @ D_to_sp @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>3 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, i2 - i1, boolify_D EQ @ D_to_sp @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>4 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, ?result, D_to_sp @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>5 = "(stack_to_mem (?result # \<sigma>) ?\<mu>, Some 0, ?result, ?\<pi>', s, \<omega>)"
+    have X: "?\<Sigma>\<^sub>A\<^sub>5 \<in> state_convert (?result # \<sigma>, \<pi>, s, \<omega>)" by auto
+    from S eval_sp_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
+      by fastforce
     have step2: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>1 = Some ?\<Sigma>\<^sub>A\<^sub>2" by simp
-    have step3: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>2 = Some ?\<Sigma>\<^sub>A\<^sub>3" by simp
-    have step4: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>3 = Some ?\<Sigma>\<^sub>A\<^sub>4" by (simp add: Let_def)
-    have step5: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>4 = Some ?\<Sigma>\<^sub>A\<^sub>5" by simp
-    have step6t: "?\<mu> (nat (?\<mu> 0 - 1)) = ?\<mu> (nat (?\<mu> 0)) \<Longrightarrow> 
-      eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>5 = Some ?\<Sigma>\<^sub>A\<^sub>6\<^sub>t" by simp
-    have step7t: "?\<mu> (nat (?\<mu> 0 - 1)) = ?\<mu> (nat (?\<mu> 0)) \<Longrightarrow> 
-      eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>6\<^sub>t = Some ?\<Sigma>\<^sub>A\<^sub>7\<^sub>t" by simp
-    have step8t: "?\<mu> (nat (?\<mu> 0 - 1)) = ?\<mu> (nat (?\<mu> 0)) \<Longrightarrow> 
-      eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>7\<^sub>t = Some ?\<Sigma>\<^sub>A\<^sub>8\<^sub>t" by simp
-    have step9t: "?\<mu> (nat (?\<mu> 0 - 1)) = ?\<mu> (nat (?\<mu> 0)) \<Longrightarrow> 
-      eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>8\<^sub>t = Some ?\<Sigma>\<^sub>A\<^sub>9" by simp
-    have step6f: "?\<mu> (nat (?\<mu> 0 - 1)) \<noteq> ?\<mu> (nat (?\<mu> 0)) \<Longrightarrow> 
-      eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>5 = Some ?\<Sigma>\<^sub>A\<^sub>6\<^sub>f" by simp
-    have step7f: "?\<mu> (nat (?\<mu> 0 - 1)) \<noteq> ?\<mu> (nat (?\<mu> 0)) \<Longrightarrow> 
-      eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>6\<^sub>f = Some ?\<Sigma>\<^sub>A\<^sub>7\<^sub>f" by simp
-    have step8f: "?\<mu> (nat (?\<mu> 0 - 1)) \<noteq> ?\<mu> (nat (?\<mu> 0)) \<Longrightarrow> 
-      eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>7\<^sub>f = Some ?\<Sigma>\<^sub>A\<^sub>8\<^sub>f" by simp
-    have step9f: "?\<mu> (nat (?\<mu> 0 - 1)) \<noteq> ?\<mu> (nat (?\<mu> 0)) \<Longrightarrow> 
-      eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>8\<^sub>f = Some ?\<Sigma>\<^sub>A\<^sub>9" by simp
-    have step10: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>9 = Some ?\<Sigma>\<^sub>A\<^sub>1\<^sub>0" by simp
-    from iter_two iter_prestep step1 step2 step3 have 
-      "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>3" by fast
-    with iter_two step4 step5 have Y: 
-      "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>5" by fast
-    have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>5 ?\<Sigma>\<^sub>A\<^sub>1\<^sub>0"
-      proof (cases "?\<mu> (nat (?\<mu> 0 - 1)) = ?\<mu> (nat (?\<mu> 0))")
-      case True
-        with iter_two iter_prestep step6t step7t step8t have 
-          "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>5 ?\<Sigma>\<^sub>A\<^sub>8\<^sub>t" by fast
-        with True iter_two step9t step10 show ?thesis by fast
-      next case False
-        with iter_two iter_prestep step6f step7f step8f have 
-          "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>5 ?\<Sigma>\<^sub>A\<^sub>8\<^sub>f" by fast
-        with False iter_two step9f step10 show ?thesis by fast
-      qed
-    with Y iter_many have X: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1\<^sub>0" by fast
-    have "?\<Sigma>\<^sub>A\<^sub>1\<^sub>0 \<in> state_convert (unboolify (i2 = i1) # \<sigma>, \<pi>, s, \<omega>)" by fastforce
-    with X show ?case by metis
+    from eval_sp_to_D have step3: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>2 ?\<Sigma>\<^sub>A\<^sub>3" 
+      by fastforce
+    from eval_boolify_D have step4: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>3 ?\<Sigma>\<^sub>A\<^sub>4" 
+      by fastforce
+    from eval_D_to_sp have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>4 ?\<Sigma>\<^sub>A\<^sub>5" by simp
+    with X step1 step2 step3 step4 iter_one show ?case by fast
   next case (evf_gt \<Pi> i1 i2 \<sigma> \<pi> s \<omega>)
+    then obtain d \<mu> where S: "\<Sigma>\<^sub>A = 
+      (stack_to_mem (i1 # i2 # \<sigma>) \<mu>, Some 0, d, 
+        sp_to_D (Reg M) @ [CBAssm {M} (Decr M)] @ sp_to_D MMinusD @ boolify_D GT @ D_to_sp @
+          concat (map instruction_conv \<pi>), s, \<omega>)" by fastforce
     let ?\<pi>' = "concat (map instruction_conv \<pi>)"
-    from evf_gt obtain d \<mu> where M: "\<Sigma>\<^sub>A = (stack_to_mem (i1 # i2 # \<sigma>) \<mu>, Some 0, d, 
-      [CBAssm {A} (Reg M), CBAssm {D} (Reg M), ABAssm 0, 
-       CBAssm {A, M} (Decr M), CBAssm {D} MMinusD, 
-       IBAssm {GT} [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} One] 
-                   [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} Zero], ABAssm 0] @ ?\<pi>', s, \<omega>)" 
-      by fastforce
     let ?\<mu> = "stack_to_mem (i1 # i2 # \<sigma>) \<mu>"
-    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some (?\<mu> 0), d, 
-      [CBAssm {D} (Reg M), ABAssm 0, CBAssm {A, M} (Decr M), CBAssm {D} MMinusD, 
-       IBAssm {GT} [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} One] 
-                   [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} Zero], ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>2 = "(?\<mu>, Some (?\<mu> 0), ?\<mu> (nat (?\<mu> 0)), 
-      [ABAssm 0, CBAssm {A, M} (Decr M), CBAssm {D} MMinusD, 
-       IBAssm {GT} [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} One] 
-                   [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} Zero], ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>3 = "(?\<mu>, Some 0, ?\<mu> (nat (?\<mu> 0)), 
-      [CBAssm {A, M} (Decr M), CBAssm {D} MMinusD, 
-       IBAssm {GT} [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} One] 
-                   [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} Zero], ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>4 = "(?\<mu>(0 := ?\<mu> 0 - 1), Some (?\<mu> 0 - 1), ?\<mu> (nat (?\<mu> 0)), 
-      [CBAssm {D} MMinusD, IBAssm {GT} [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} One] 
-        [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} Zero], ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>5 = "(?\<mu>(0 := ?\<mu> 0 - 1), Some (?\<mu> 0 - 1), ?\<mu> (nat (?\<mu> 0 - 1)) - ?\<mu> (nat (?\<mu> 0)), 
-      [IBAssm {GT} [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} One] 
-                   [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} Zero], ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>6\<^sub>t = "(?\<mu>(0 := ?\<mu> 0 - 1), None, ?\<mu> (nat (?\<mu> 0 - 1)) - ?\<mu> (nat (?\<mu> 0)), 
-      [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} One, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>7\<^sub>t = "(?\<mu>(0 := ?\<mu> 0 - 1), Some 0, ?\<mu> (nat (?\<mu> 0 - 1)) - ?\<mu> (nat (?\<mu> 0)), 
-      [CBAssm {A} (Reg M), CBAssm {M} One, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>8\<^sub>t = "(?\<mu>(0 := ?\<mu> 0 - 1), Some (?\<mu> 0 - 1), ?\<mu> (nat (?\<mu> 0 - 1)) - ?\<mu> (nat (?\<mu> 0)), 
-      [CBAssm {M} One, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>6\<^sub>f = "(?\<mu>(0 := ?\<mu> 0 - 1), None, ?\<mu> (nat (?\<mu> 0 - 1)) - ?\<mu> (nat (?\<mu> 0)), 
-      [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} Zero, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>7\<^sub>f = "(?\<mu>(0 := ?\<mu> 0 - 1), Some 0, ?\<mu> (nat (?\<mu> 0 - 1)) - ?\<mu> (nat (?\<mu> 0)), 
-      [CBAssm {A} (Reg M), CBAssm {M} Zero, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>8\<^sub>f = "(?\<mu>(0 := ?\<mu> 0 - 1), Some (?\<mu> 0 - 1), ?\<mu> (nat (?\<mu> 0 - 1)) - ?\<mu> (nat (?\<mu> 0)), 
-      [CBAssm {M} Zero, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>9 = "(stack_to_mem (unboolify (i2 > i1) # \<sigma>) ?\<mu>, Some (?\<mu> 0 - 1), 
-      ?\<mu> (nat (?\<mu> 0 - 1)) - ?\<mu> (nat (?\<mu> 0)), [ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>1\<^sub>0 = "(stack_to_mem (unboolify (i2 > i1) # \<sigma>) ?\<mu>, Some 0, 
-      ?\<mu> (nat (?\<mu> 0 - 1)) - ?\<mu> (nat (?\<mu> 0)), ?\<pi>', s, \<omega>)"
-    from M have step1: "eval_b_assembly (program_convert \<Pi>) \<Sigma>\<^sub>A = Some ?\<Sigma>\<^sub>A\<^sub>1" by simp
+    let ?result = "unboolify (i2 > i1)"
+    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some 0, i1,
+      [CBAssm {M} (Decr M)] @ sp_to_D MMinusD @ boolify_D GT @ D_to_sp @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, i1, 
+      sp_to_D MMinusD @ boolify_D GT @ D_to_sp @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>3 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, i2 - i1, boolify_D GT @ D_to_sp @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>4' = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, unboolify (i2 - i1 > 0), D_to_sp @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>4 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, ?result, D_to_sp @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>5 = "(stack_to_mem (?result # \<sigma>) ?\<mu>, Some 0, ?result, ?\<pi>', s, \<omega>)"
+    have X: "?\<Sigma>\<^sub>A\<^sub>5 \<in> state_convert (?result # \<sigma>, \<pi>, s, \<omega>)" by auto
+    from S eval_sp_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
+      by fastforce
     have step2: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>1 = Some ?\<Sigma>\<^sub>A\<^sub>2" by simp
-    have step3: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>2 = Some ?\<Sigma>\<^sub>A\<^sub>3" by simp
-    have step4: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>3 = Some ?\<Sigma>\<^sub>A\<^sub>4" by (simp add: Let_def)
-    have step5: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>4 = Some ?\<Sigma>\<^sub>A\<^sub>5" by simp
-    have step6t: "?\<mu> (nat (?\<mu> 0 - 1)) > ?\<mu> (nat (?\<mu> 0)) \<Longrightarrow> 
-      eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>5 = Some ?\<Sigma>\<^sub>A\<^sub>6\<^sub>t" by simp
-    have step7t: "?\<mu> (nat (?\<mu> 0 - 1)) > ?\<mu> (nat (?\<mu> 0)) \<Longrightarrow> 
-      eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>6\<^sub>t = Some ?\<Sigma>\<^sub>A\<^sub>7\<^sub>t" by simp
-    have step8t: "?\<mu> (nat (?\<mu> 0 - 1)) > ?\<mu> (nat (?\<mu> 0)) \<Longrightarrow> 
-      eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>7\<^sub>t = Some ?\<Sigma>\<^sub>A\<^sub>8\<^sub>t" by simp
-    have step9t: "?\<mu> (nat (?\<mu> 0 - 1)) > ?\<mu> (nat (?\<mu> 0)) \<Longrightarrow> 
-      eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>8\<^sub>t = Some ?\<Sigma>\<^sub>A\<^sub>9" by simp
-    have step6f: "\<not> ?\<mu> (nat (?\<mu> 0 - 1)) > ?\<mu> (nat (?\<mu> 0)) \<Longrightarrow> 
-      eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>5 = Some ?\<Sigma>\<^sub>A\<^sub>6\<^sub>f" by simp
-    have step7f: "\<not> ?\<mu> (nat (?\<mu> 0 - 1)) > ?\<mu> (nat (?\<mu> 0)) \<Longrightarrow> 
-      eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>6\<^sub>f = Some ?\<Sigma>\<^sub>A\<^sub>7\<^sub>f" by simp
-    have step8f: "\<not> ?\<mu> (nat (?\<mu> 0 - 1)) > ?\<mu> (nat (?\<mu> 0)) \<Longrightarrow> 
-      eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>7\<^sub>f = Some ?\<Sigma>\<^sub>A\<^sub>8\<^sub>f" by simp
-    have step9f: "\<not> ?\<mu> (nat (?\<mu> 0 - 1)) > ?\<mu> (nat (?\<mu> 0)) \<Longrightarrow> 
-      eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>8\<^sub>f = Some ?\<Sigma>\<^sub>A\<^sub>9" by simp
-    have step10: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>9 = Some ?\<Sigma>\<^sub>A\<^sub>1\<^sub>0" by simp
-    from iter_two iter_prestep step1 step2 step3 have 
-      "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>3" by fast
-    with iter_two step4 step5 have Y: 
-      "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>5" by fast
-    have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>5 ?\<Sigma>\<^sub>A\<^sub>1\<^sub>0"
-      proof (cases "?\<mu> (nat (?\<mu> 0 - 1)) > ?\<mu> (nat (?\<mu> 0))")
-      case True
-        with iter_two iter_prestep step6t step7t step8t have 
-          "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>5 ?\<Sigma>\<^sub>A\<^sub>8\<^sub>t" by fast
-        with True iter_two step9t step10 show ?thesis by fast
-      next case False
-        with iter_two iter_prestep step6f step7f step8f have 
-          "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>5 ?\<Sigma>\<^sub>A\<^sub>8\<^sub>f" by fast
-        with False iter_two step9f step10 show ?thesis by fast
-      qed
-    with Y iter_many have X: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1\<^sub>0" by fast
-    have "?\<Sigma>\<^sub>A\<^sub>1\<^sub>0 \<in> state_convert (unboolify (i2 > i1) # \<sigma>, \<pi>, s, \<omega>)" by fastforce
-    with X show ?case by metis
+    from eval_sp_to_D have step3: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>2 ?\<Sigma>\<^sub>A\<^sub>3" 
+      by fastforce
+    from eval_boolify_D have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>3 ?\<Sigma>\<^sub>A\<^sub>4'" 
+      by fastforce
+    moreover have "?\<Sigma>\<^sub>A\<^sub>4' = ?\<Sigma>\<^sub>A\<^sub>4" by smt
+    ultimately have step4: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>3 ?\<Sigma>\<^sub>A\<^sub>4" by simp
+    from eval_D_to_sp have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>4 ?\<Sigma>\<^sub>A\<^sub>5" by simp
+    with X step1 step2 step3 step4 iter_one show ?case by fast
   next case (evf_lt \<Pi> i1 i2 \<sigma> \<pi> s \<omega>)
+    then obtain d \<mu> where S: "\<Sigma>\<^sub>A = 
+      (stack_to_mem (i1 # i2 # \<sigma>) \<mu>, Some 0, d, 
+        sp_to_D (Reg M) @ [CBAssm {M} (Decr M)] @ sp_to_D MMinusD @ boolify_D LT @ D_to_sp @
+          concat (map instruction_conv \<pi>), s, \<omega>)" by fastforce
     let ?\<pi>' = "concat (map instruction_conv \<pi>)"
-    from evf_lt obtain d \<mu> where M: "\<Sigma>\<^sub>A = (stack_to_mem (i1 # i2 # \<sigma>) \<mu>, Some 0, d, 
-      [CBAssm {A} (Reg M), CBAssm {D} (Reg M), ABAssm 0, 
-       CBAssm {A, M} (Decr M), CBAssm {D} MMinusD, 
-       IBAssm {LT} [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} One] 
-                   [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} Zero], ABAssm 0] @ ?\<pi>', s, \<omega>)" 
+    let ?\<mu> = "stack_to_mem (i1 # i2 # \<sigma>) \<mu>"
+    let ?result = "unboolify (i2 < i1)"
+    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some 0, i1, 
+      [CBAssm {M} (Decr M)] @ sp_to_D MMinusD @ boolify_D LT @ D_to_sp @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, i1, 
+      sp_to_D MMinusD @ boolify_D LT @ D_to_sp @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>3 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, i2 - i1, boolify_D LT @ D_to_sp @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>4 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, ?result, D_to_sp @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>5 = "(stack_to_mem (?result # \<sigma>) ?\<mu>, Some 0, ?result, ?\<pi>', s, \<omega>)"
+    have X: "?\<Sigma>\<^sub>A\<^sub>5 \<in> state_convert (?result # \<sigma>, \<pi>, s, \<omega>)" by auto
+    from S eval_sp_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
       by fastforce
-    let ?\<mu> = "stack_to_mem (i1 # i2 # \<sigma>) \<mu>"
-    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some (?\<mu> 0), d, 
-      [CBAssm {D} (Reg M), ABAssm 0, CBAssm {A, M} (Decr M), CBAssm {D} MMinusD, 
-       IBAssm {LT} [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} One] 
-                   [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} Zero], ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>2 = "(?\<mu>, Some (?\<mu> 0), ?\<mu> (nat (?\<mu> 0)), 
-      [ABAssm 0, CBAssm {A, M} (Decr M), CBAssm {D} MMinusD, 
-       IBAssm {LT} [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} One] 
-                   [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} Zero], ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>3 = "(?\<mu>, Some 0, ?\<mu> (nat (?\<mu> 0)), 
-      [CBAssm {A, M} (Decr M), CBAssm {D} MMinusD, 
-       IBAssm {LT} [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} One] 
-                   [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} Zero], ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>4 = "(?\<mu>(0 := ?\<mu> 0 - 1), Some (?\<mu> 0 - 1), ?\<mu> (nat (?\<mu> 0)), 
-      [CBAssm {D} MMinusD, IBAssm {LT} [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} One] 
-        [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} Zero], ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>5 = "(?\<mu>(0 := ?\<mu> 0 - 1), Some (?\<mu> 0 - 1), ?\<mu> (nat (?\<mu> 0 - 1)) - ?\<mu> (nat (?\<mu> 0)), 
-      [IBAssm {LT} [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} One] 
-                   [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} Zero], ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>6\<^sub>t = "(?\<mu>(0 := ?\<mu> 0 - 1), None, ?\<mu> (nat (?\<mu> 0 - 1)) - ?\<mu> (nat (?\<mu> 0)), 
-      [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} One, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>7\<^sub>t = "(?\<mu>(0 := ?\<mu> 0 - 1), Some 0, ?\<mu> (nat (?\<mu> 0 - 1)) - ?\<mu> (nat (?\<mu> 0)), 
-      [CBAssm {A} (Reg M), CBAssm {M} One, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>8\<^sub>t = "(?\<mu>(0 := ?\<mu> 0 - 1), Some (?\<mu> 0 - 1), ?\<mu> (nat (?\<mu> 0 - 1)) - ?\<mu> (nat (?\<mu> 0)), 
-      [CBAssm {M} One, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>6\<^sub>f = "(?\<mu>(0 := ?\<mu> 0 - 1), None, ?\<mu> (nat (?\<mu> 0 - 1)) - ?\<mu> (nat (?\<mu> 0)), 
-      [ABAssm 0, CBAssm {A} (Reg M), CBAssm {M} Zero, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>7\<^sub>f = "(?\<mu>(0 := ?\<mu> 0 - 1), Some 0, ?\<mu> (nat (?\<mu> 0 - 1)) - ?\<mu> (nat (?\<mu> 0)), 
-      [CBAssm {A} (Reg M), CBAssm {M} Zero, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>8\<^sub>f = "(?\<mu>(0 := ?\<mu> 0 - 1), Some (?\<mu> 0 - 1), ?\<mu> (nat (?\<mu> 0 - 1)) - ?\<mu> (nat (?\<mu> 0)), 
-      [CBAssm {M} Zero, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>9 = "(stack_to_mem (unboolify (i2 < i1) # \<sigma>) ?\<mu>, Some (?\<mu> 0 - 1), 
-      ?\<mu> (nat (?\<mu> 0 - 1)) - ?\<mu> (nat (?\<mu> 0)), [ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>1\<^sub>0 = "(stack_to_mem (unboolify (i2 < i1) # \<sigma>) ?\<mu>, Some 0, 
-      ?\<mu> (nat (?\<mu> 0 - 1)) - ?\<mu> (nat (?\<mu> 0)), ?\<pi>', s, \<omega>)"
-    from M have step1: "eval_b_assembly (program_convert \<Pi>) \<Sigma>\<^sub>A = Some ?\<Sigma>\<^sub>A\<^sub>1" by simp
     have step2: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>1 = Some ?\<Sigma>\<^sub>A\<^sub>2" by simp
-    have step3: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>2 = Some ?\<Sigma>\<^sub>A\<^sub>3" by simp
-    have step4: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>3 = Some ?\<Sigma>\<^sub>A\<^sub>4" by (simp add: Let_def)
-    have step5: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>4 = Some ?\<Sigma>\<^sub>A\<^sub>5" by simp
-    have step6t: "?\<mu> (nat (?\<mu> 0 - 1)) < ?\<mu> (nat (?\<mu> 0)) \<Longrightarrow> 
-      eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>5 = Some ?\<Sigma>\<^sub>A\<^sub>6\<^sub>t" by simp
-    have step7t: "?\<mu> (nat (?\<mu> 0 - 1)) < ?\<mu> (nat (?\<mu> 0)) \<Longrightarrow> 
-      eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>6\<^sub>t = Some ?\<Sigma>\<^sub>A\<^sub>7\<^sub>t" by simp
-    have step8t: "?\<mu> (nat (?\<mu> 0 - 1)) < ?\<mu> (nat (?\<mu> 0)) \<Longrightarrow> 
-      eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>7\<^sub>t = Some ?\<Sigma>\<^sub>A\<^sub>8\<^sub>t" by simp
-    have step9t: "?\<mu> (nat (?\<mu> 0 - 1)) < ?\<mu> (nat (?\<mu> 0)) \<Longrightarrow> 
-      eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>8\<^sub>t = Some ?\<Sigma>\<^sub>A\<^sub>9" by simp
-    have step6f: "\<not> ?\<mu> (nat (?\<mu> 0 - 1)) < ?\<mu> (nat (?\<mu> 0)) \<Longrightarrow> 
-      eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>5 = Some ?\<Sigma>\<^sub>A\<^sub>6\<^sub>f" by simp
-    have step7f: "\<not> ?\<mu> (nat (?\<mu> 0 - 1)) < ?\<mu> (nat (?\<mu> 0)) \<Longrightarrow> 
-      eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>6\<^sub>f = Some ?\<Sigma>\<^sub>A\<^sub>7\<^sub>f" by simp
-    have step8f: "\<not> ?\<mu> (nat (?\<mu> 0 - 1)) < ?\<mu> (nat (?\<mu> 0)) \<Longrightarrow> 
-      eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>7\<^sub>f = Some ?\<Sigma>\<^sub>A\<^sub>8\<^sub>f" by simp
-    have step9f: "\<not> ?\<mu> (nat (?\<mu> 0 - 1)) < ?\<mu> (nat (?\<mu> 0)) \<Longrightarrow> 
-      eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>8\<^sub>f = Some ?\<Sigma>\<^sub>A\<^sub>9" by simp
-    have step10: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>9 = Some ?\<Sigma>\<^sub>A\<^sub>1\<^sub>0" by simp
-    from iter_two iter_prestep step1 step2 step3 have 
-      "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>3" by fast
-    with iter_two step4 step5 have Y: 
-      "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>5" by fast
-    have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>5 ?\<Sigma>\<^sub>A\<^sub>1\<^sub>0"
-      proof (cases "?\<mu> (nat (?\<mu> 0 - 1)) < ?\<mu> (nat (?\<mu> 0))")
-      case True
-        with iter_two iter_prestep step6t step7t step8t have 
-          "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>5 ?\<Sigma>\<^sub>A\<^sub>8\<^sub>t" by fast
-        with True iter_two step9t step10 show ?thesis by fast
-      next case False
-        with iter_two iter_prestep step6f step7f step8f have 
-          "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>5 ?\<Sigma>\<^sub>A\<^sub>8\<^sub>f" by fast
-        with False iter_two step9f step10 show ?thesis by fast
-      qed
-    with Y iter_many have X: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1\<^sub>0" by fast
-    have "?\<Sigma>\<^sub>A\<^sub>1\<^sub>0 \<in> state_convert (unboolify (i2 < i1) # \<sigma>, \<pi>, s, \<omega>)" by fastforce
-    with X show ?case by metis
+    from eval_sp_to_D have step3: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>2 ?\<Sigma>\<^sub>A\<^sub>3" 
+      by fastforce
+    from eval_boolify_D have step4: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>3 ?\<Sigma>\<^sub>A\<^sub>4" 
+      by fastforce
+    from eval_D_to_sp have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>4 ?\<Sigma>\<^sub>A\<^sub>5" by simp
+    with X step1 step2 step3 step4 iter_one show ?case by fast
   next case (evf_and \<Pi> i1 i2 \<sigma> \<pi> s \<omega>)
+    then obtain d \<mu> where S: "\<Sigma>\<^sub>A = 
+      (stack_to_mem (i1 # i2 # \<sigma>) \<mu>, Some 0, d, 
+        sp_to_D (Reg M) @ [CBAssm {M} (Decr M)] @ sp_to_D DAndM @ D_to_sp @ 
+          concat (map instruction_conv \<pi>), s, \<omega>)" by fastforce
     let ?\<pi>' = "concat (map instruction_conv \<pi>)"
-    from evf_and obtain d \<mu> where M: "\<Sigma>\<^sub>A = (stack_to_mem (i1 # i2 # \<sigma>) \<mu>, Some 0, d, 
-      [CBAssm {A} (Reg M), CBAssm {D} (Reg M), ABAssm 0, 
-       CBAssm {A, M} (Decr M), CBAssm {M} DAndM, ABAssm 0] @ ?\<pi>', s, \<omega>)" by fastforce
     let ?\<mu> = "stack_to_mem (i1 # i2 # \<sigma>) \<mu>"
-    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some (?\<mu> 0), d, 
-      [CBAssm {D} (Reg M), ABAssm 0, CBAssm {A, M} (Decr M), CBAssm {M} DAndM, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>2 = "(?\<mu>, Some (?\<mu> 0), ?\<mu> (nat (?\<mu> 0)), 
-      [ABAssm 0, CBAssm {A, M} (Decr M), CBAssm {M} DAndM, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>3 = "(?\<mu>, Some 0, ?\<mu> (nat (?\<mu> 0)), 
-      [CBAssm {A, M} (Decr M), CBAssm {M} DAndM, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>4 = "(?\<mu>(0 := ?\<mu> 0 - 1), Some (?\<mu> 0 - 1), ?\<mu> (nat (?\<mu> 0)), 
-      [CBAssm {M} DAndM, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>5 = "(stack_to_mem (unboolify (boolify i1 \<and> boolify i2) # \<sigma>) ?\<mu>, Some (?\<mu> 0 - 1), 
-      ?\<mu> (nat (?\<mu> 0)), [ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>6 = "(stack_to_mem (unboolify (boolify i1 \<and> boolify i2) # \<sigma>) ?\<mu>, Some 0, 
-      ?\<mu> (nat (?\<mu> 0)), ?\<pi>', s, \<omega>)"
-    from M have step1: "eval_b_assembly (program_convert \<Pi>) \<Sigma>\<^sub>A = Some ?\<Sigma>\<^sub>A\<^sub>1" by simp
+    let ?result = "unboolify (boolify i1 \<and> boolify i2)"
+    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some 0, i1, [CBAssm {M} (Decr M)] @ sp_to_D DAndM @ D_to_sp @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, i1, sp_to_D DAndM @ D_to_sp @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>3 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, ?result, D_to_sp @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>4 = "(stack_to_mem (?result # \<sigma>) ?\<mu>, Some 0, ?result, ?\<pi>', s, \<omega>)"
+    have X: "?\<Sigma>\<^sub>A\<^sub>4 \<in> state_convert (?result # \<sigma>, \<pi>, s, \<omega>)" by auto
+    from S eval_sp_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
+      by fastforce
     have step2: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>1 = Some ?\<Sigma>\<^sub>A\<^sub>2" by simp
-    have step3: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>2 = Some ?\<Sigma>\<^sub>A\<^sub>3" by simp
-    have step4: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>3 = Some ?\<Sigma>\<^sub>A\<^sub>4" by (simp add: Let_def)
-    have step5: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>4 = Some ?\<Sigma>\<^sub>A\<^sub>5" by simp
-    have step6: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>5 = Some ?\<Sigma>\<^sub>A\<^sub>6" by simp
-    from iter_two iter_prestep step1 step2 step3 have
-      "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>3" by fast
-    moreover from iter_two iter_prestep step4 step5 step6 have
-      "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>3 ?\<Sigma>\<^sub>A\<^sub>6" by fast
-    ultimately have X: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>6" by fast
-    have "?\<Sigma>\<^sub>A\<^sub>6 \<in> state_convert (unboolify (boolify i2 \<and> boolify i1) # \<sigma>, \<pi>, s, \<omega>)" by auto
-    with X M show ?case by metis
+    from eval_sp_to_D have step3: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>2 ?\<Sigma>\<^sub>A\<^sub>3" 
+      by fastforce
+    from eval_D_to_sp have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>3 ?\<Sigma>\<^sub>A\<^sub>4" by simp
+    with step1 step2 step3 iter_one X show ?case by fast
   next case (evf_or \<Pi> i1 i2 \<sigma> \<pi> s \<omega>)
+    then obtain d \<mu> where S: "\<Sigma>\<^sub>A = 
+      (stack_to_mem (i1 # i2 # \<sigma>) \<mu>, Some 0, d, 
+        sp_to_D (Reg M) @ [CBAssm {M} (Decr M)] @ sp_to_D DOrM @ D_to_sp @ 
+          concat (map instruction_conv \<pi>), s, \<omega>)" by fastforce
     let ?\<pi>' = "concat (map instruction_conv \<pi>)"
-    from evf_or obtain d \<mu> where M: "\<Sigma>\<^sub>A = (stack_to_mem (i1 # i2 # \<sigma>) \<mu>, Some 0, d, 
-      [CBAssm {A} (Reg M), CBAssm {D} (Reg M), ABAssm 0, 
-       CBAssm {A, M} (Decr M), CBAssm {M} DOrM, ABAssm 0] @ ?\<pi>', s, \<omega>)" by fastforce
     let ?\<mu> = "stack_to_mem (i1 # i2 # \<sigma>) \<mu>"
-    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some (?\<mu> 0), d, 
-      [CBAssm {D} (Reg M), ABAssm 0, CBAssm {A, M} (Decr M), CBAssm {M} DOrM, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>2 = "(?\<mu>, Some (?\<mu> 0), ?\<mu> (nat (?\<mu> 0)), 
-      [ABAssm 0, CBAssm {A, M} (Decr M), CBAssm {M} DOrM, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>3 = "(?\<mu>, Some 0, ?\<mu> (nat (?\<mu> 0)), 
-      [CBAssm {A, M} (Decr M), CBAssm {M} DOrM, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>4 = "(?\<mu>(0 := ?\<mu> 0 - 1), Some (?\<mu> 0 - 1), ?\<mu> (nat (?\<mu> 0)), 
-      [CBAssm {M} DOrM, ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>5 = "(stack_to_mem (unboolify (boolify i1 \<or> boolify i2) # \<sigma>) ?\<mu>, Some (?\<mu> 0 - 1), 
-      ?\<mu> (nat (?\<mu> 0)), [ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>6 = "(stack_to_mem (unboolify (boolify i1 \<or> boolify i2) # \<sigma>) ?\<mu>, Some 0, 
-      ?\<mu> (nat (?\<mu> 0)), ?\<pi>', s, \<omega>)"
-    from M have step1: "eval_b_assembly (program_convert \<Pi>) \<Sigma>\<^sub>A = Some ?\<Sigma>\<^sub>A\<^sub>1" by simp
+    let ?result = "unboolify (boolify i1 \<or> boolify i2)"
+    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some 0, i1, [CBAssm {M} (Decr M)] @ sp_to_D DOrM @ D_to_sp @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, i1, sp_to_D DOrM @ D_to_sp @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>3 = "(stack_to_mem (i2 # \<sigma>) ?\<mu>, Some 0, ?result, D_to_sp @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>4 = "(stack_to_mem (?result # \<sigma>) ?\<mu>, Some 0, ?result, ?\<pi>', s, \<omega>)"
+    have X: "?\<Sigma>\<^sub>A\<^sub>4 \<in> state_convert (?result # \<sigma>, \<pi>, s, \<omega>)" by auto
+    from S eval_sp_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
+      by fastforce
     have step2: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>1 = Some ?\<Sigma>\<^sub>A\<^sub>2" by simp
-    have step3: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>2 = Some ?\<Sigma>\<^sub>A\<^sub>3" by simp
-    have step4: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>3 = Some ?\<Sigma>\<^sub>A\<^sub>4" by (simp add: Let_def)
-    have step5: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>4 = Some ?\<Sigma>\<^sub>A\<^sub>5" by simp
-    have step6: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>5 = Some ?\<Sigma>\<^sub>A\<^sub>6" by simp
-    from iter_two iter_prestep step1 step2 step3 have
-      "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>3" by fast
-    moreover from iter_two iter_prestep step4 step5 step6 have
-      "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>3 ?\<Sigma>\<^sub>A\<^sub>6" by fast
-    ultimately have X: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>6" by fast
-    have "?\<Sigma>\<^sub>A\<^sub>6 \<in> state_convert (unboolify (boolify i2 \<or> boolify i1) # \<sigma>, \<pi>, s, \<omega>)" by auto
-    with X show ?case by metis
+    from eval_sp_to_D have step3: "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>2 ?\<Sigma>\<^sub>A\<^sub>3" 
+      by fastforce
+    from eval_D_to_sp have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>3 ?\<Sigma>\<^sub>A\<^sub>4" by simp
+    with step1 step2 step3 iter_one X show ?case by fast
   next case (evf_not \<Pi> i1 \<sigma> \<pi> s \<omega>)
+    then obtain d \<mu> where S: "\<Sigma>\<^sub>A = 
+      (stack_to_mem (i1 # \<sigma>) \<mu>, Some 0, d, 
+        sp_to_D (NotR M) @ D_to_sp @ concat (map instruction_conv \<pi>), s, \<omega>)" by fastforce
     let ?\<pi>' = "concat (map instruction_conv \<pi>)"
-    from evf_not obtain d \<mu> where M: "\<Sigma>\<^sub>A = (stack_to_mem (i1 # \<sigma>) \<mu>, Some 0, d, 
-      [CBAssm {A} (Reg M), CBAssm {M} (NotR M), ABAssm 0] @ ?\<pi>', s, \<omega>)" by fastforce
-    let ?\<mu> = "stack_to_mem (i1 # \<sigma>) \<mu>"
-    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some (?\<mu> 0), d, [CBAssm {M} (NotR M), ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>2 = "(?\<mu>(nat (?\<mu> 0) := unboolify (\<not> boolify (?\<mu> (nat (?\<mu> 0))))), Some (?\<mu> 0), d, 
-      [ABAssm 0] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>3 = "(?\<mu>(nat (?\<mu> 0) := unboolify (\<not> boolify (?\<mu> (nat (?\<mu> 0))))), Some 0, d, ?\<pi>', s, \<omega>)"
-    from M have step1: "eval_b_assembly (program_convert \<Pi>) \<Sigma>\<^sub>A = Some ?\<Sigma>\<^sub>A\<^sub>1" by simp
+    let ?result = "unboolify (\<not> boolify i1)"
+    let ?\<Sigma>\<^sub>A\<^sub>1 = "(stack_to_mem (i1 # \<sigma>) \<mu>, Some 0, ?result, D_to_sp @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem (?result # \<sigma>) \<mu>, Some 0, ?result, ?\<pi>', s, \<omega>)"
+    have X: "?\<Sigma>\<^sub>A\<^sub>2 \<in> state_convert (?result # \<sigma>, \<pi>, s, \<omega>)" by auto
+    from S eval_sp_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
+      by fastforce
+    from eval_D_to_sp have "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>1 ?\<Sigma>\<^sub>A\<^sub>2" by simp
+    with step1 X show ?case by fast
+  next case (evf_print \<Pi> i1 \<sigma> \<pi> s \<omega>)
+    then obtain d \<mu> where S: "\<Sigma>\<^sub>A = 
+      (stack_to_mem (i1 # \<sigma>) \<mu>, Some 0, d, 
+        sp_to_D (Reg M) @ [PBAssm, CBAssm {M} (Decr M)] @ concat (map instruction_conv \<pi>), s, \<omega>)" 
+      by fastforce
+    let ?\<pi>' = "concat (map instruction_conv \<pi>)"
+    let ?\<Sigma>\<^sub>A\<^sub>1 = "(stack_to_mem (i1 # \<sigma>) \<mu>, Some 0, i1, [PBAssm, CBAssm {M} (Decr M)] @ ?\<pi>', s, \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>2 = "(stack_to_mem (i1 # \<sigma>) \<mu>, Some 0, i1, [CBAssm {M} (Decr M)] @ ?\<pi>', s, i1 # \<omega>)"
+    let ?\<Sigma>\<^sub>A\<^sub>3 = "(stack_to_mem \<sigma> (stack_to_mem (i1 # \<sigma>) \<mu>), Some 0, i1, ?\<pi>', s, i1 # \<omega>)"
+    have X: "?\<Sigma>\<^sub>A\<^sub>3 \<in> state_convert (\<sigma>, \<pi>, s, i1 # \<omega>)" by auto
+    from S eval_sp_to_D have step1: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>1" 
+      by fastforce
     have step2: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>1 = Some ?\<Sigma>\<^sub>A\<^sub>2" by simp
     have "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>2 = Some ?\<Sigma>\<^sub>A\<^sub>3" by simp
-    with iter_two iter_prestep step1 step2 have X:
-      "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>3" by fast
-    have "(stack_to_mem (i1 # \<sigma>) \<mu>)(Suc (length \<sigma>) := unboolify (\<not> boolify i1)) = 
-      stack_to_mem (unboolify (\<not> boolify i1) # \<sigma>) \<mu>" by auto
-    hence "?\<Sigma>\<^sub>A\<^sub>3 \<in> state_convert (unboolify (\<not> boolify i1) # \<sigma>, \<pi>, s, \<omega>)" by auto
-    with X show ?case by metis
-  next case (evf_print \<Pi> i1 \<sigma> \<pi> s \<omega>)
-    let ?\<pi>' = "concat (map instruction_conv \<pi>)"
-    from evf_print obtain d \<mu> where M: "\<Sigma>\<^sub>A = (stack_to_mem (i1 # \<sigma>) \<mu>, Some 0, d, 
-        [CBAssm {A} (Reg M), CBAssm {D} (Reg M), PBAssm, ABAssm 0, CBAssm {M} (Decr M)] @ ?\<pi>', s, \<omega>)" 
-      by fastforce
-    let ?\<mu> = "stack_to_mem (i1 # \<sigma>) \<mu>"
-    let ?\<Sigma>\<^sub>A\<^sub>1 = "(?\<mu>, Some (?\<mu> 0), d, 
-      [CBAssm {D} (Reg M), PBAssm, ABAssm 0, CBAssm {M} (Decr M)] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>2 = "(?\<mu>, Some (?\<mu> 0), ?\<mu> (nat (?\<mu> 0)), [PBAssm, ABAssm 0, CBAssm {M} (Decr M)] @ ?\<pi>', s, \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>3 = "(?\<mu>, Some (?\<mu> 0), ?\<mu> (nat (?\<mu> 0)), 
-      [ABAssm 0, CBAssm {M} (Decr M)] @ ?\<pi>', s, ?\<mu> (nat (?\<mu> 0)) # \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>4 = "(?\<mu>, Some 0, ?\<mu> (nat (?\<mu> 0)), [CBAssm {M} (Decr M)] @ ?\<pi>', s, ?\<mu> (nat (?\<mu> 0)) # \<omega>)"
-    let ?\<Sigma>\<^sub>A\<^sub>5 = "(?\<mu>(0 := ?\<mu> 0 - 1), Some 0, ?\<mu> (nat (?\<mu> 0)), ?\<pi>', s, ?\<mu> (nat (?\<mu> 0)) # \<omega>)"
-    from M have step1: "eval_b_assembly (program_convert \<Pi>) \<Sigma>\<^sub>A = Some ?\<Sigma>\<^sub>A\<^sub>1" by simp
-    have step2: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>1 = Some ?\<Sigma>\<^sub>A\<^sub>2" by simp
-    have step3: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>2 = Some ?\<Sigma>\<^sub>A\<^sub>3" by simp
-    have step4: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>3 = Some ?\<Sigma>\<^sub>A\<^sub>4" by simp
-    have step5: "eval_b_assembly (program_convert \<Pi>) ?\<Sigma>\<^sub>A\<^sub>4 = Some ?\<Sigma>\<^sub>A\<^sub>5" by simp
-    from iter_two iter_prestep step1 step2 step3 have
-      "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>3" by fast
-    moreover from iter_two step4 step5 have 
-      "iterate (eval_b_assembly (program_convert \<Pi>)) ?\<Sigma>\<^sub>A\<^sub>3 ?\<Sigma>\<^sub>A\<^sub>5" by fast
-    ultimately have X: "iterate (eval_b_assembly (program_convert \<Pi>)) \<Sigma>\<^sub>A ?\<Sigma>\<^sub>A\<^sub>5" by fast
-    have "?\<Sigma>\<^sub>A\<^sub>5 \<in> state_convert (\<sigma>, \<pi>, s, i1 # \<omega>)" by auto
-    with X show ?case by metis
+    with step1 step2 X iter_two show ?case by fast
   qed
 
 theorem stack_to_assembly_correct [simp]: "iterate_ind (eval_flat_stack \<Pi>) \<Sigma>\<^sub>S \<Sigma>\<^sub>S' \<Longrightarrow> 

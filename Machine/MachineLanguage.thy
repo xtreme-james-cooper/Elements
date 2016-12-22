@@ -18,7 +18,7 @@ fun eval_instruction :: "machine_instruction \<Rightarrow> machine_state \<Right
     in (if M \<in> dst then \<mu>(nat a := n) else \<mu>, 
         if A \<in> dst then n else a, 
         if D \<in> dst then n else d, 
-        if should_jump n jmp then nat a else Suc pc,
+        if compare n jmp then nat a else Suc pc,
         \<omega>))"
 | "eval_instruction PInstr (\<mu>, a, d, pc, \<omega>) = (\<mu>, a, d, Suc pc, d # \<omega>)"
 

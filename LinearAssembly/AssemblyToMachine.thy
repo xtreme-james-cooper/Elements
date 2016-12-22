@@ -261,7 +261,7 @@ lemma eval_assembly_conv [simp]: "domain_distinct \<Pi> \<Longrightarrow> eval_l
     from 5 P lookup_convert have first_step: "eval_machine (program_convert \<Pi>) (\<mu>, aa, d, pc, \<omega>) = 
       Some (\<mu>, ?s, d, Suc pc, \<omega>)" by fastforce
     show ?case
-      proof (cases "should_jump d jmp")
+      proof (cases "compare d jmp")
       case True
         thus ?thesis
           proof (cases "lookup \<Pi> s")

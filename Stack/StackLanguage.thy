@@ -17,7 +17,7 @@ type_synonym stack_state = "stack_value list \<times> stack_instruction list \<t
 
 inductive eval_stack :: "stack_program \<Rightarrow> stack_state \<Rightarrow> stack_state \<Rightarrow> bool" where
   evs_jump [simp]: "\<Pi> s = Some (\<pi>, s') \<Longrightarrow> eval_stack \<Pi> (\<sigma>, [], s, \<omega>) (\<sigma>, \<pi>, s', \<omega>)"
-| evs_add [simp]: "eval_stack \<Pi> (IntV i1 # IntV i2 # \<sigma>, Add # \<pi>, s, \<omega>) (IntV (i2 + i1) # \<sigma>, \<pi>, s, \<omega>)"
+| evs_add [simp]: "eval_stack \<Pi> (IntV i1 # IntV i2 # \<sigma>, Add # \<pi>, s, \<omega>) (IntV (i1 + i2) # \<sigma>, \<pi>, s, \<omega>)"
 | evs_sub [simp]: "eval_stack \<Pi> (IntV i1 # IntV i2 # \<sigma>, Sub # \<pi>, s, \<omega>) (IntV (i2 - i1) # \<sigma>, \<pi>, s, \<omega>)"
 | evs_neg [simp]: "eval_stack \<Pi> (IntV i1 # \<sigma>, Neg # \<pi>, s, \<omega>) (IntV (-i1) # \<sigma>, \<pi>, s, \<omega>)"
 | evs_eq [simp]: "eval_stack \<Pi> (IntV i1 # IntV i2 # \<sigma>, Eq # \<pi>, s, \<omega>) (Bool (i2 = i1) # \<sigma>, \<pi>, s, \<omega>)"

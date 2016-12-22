@@ -24,10 +24,4 @@ lemma [simp]: "unboolify False = 0"
 lemma [simp]: "boolify (unboolify b) = b"
   by (cases b) (simp_all add: boolify_def)
 
-lemma [simp]: "unboolify (boolify i2 \<and> boolify i1) = unboolify (boolify i1 \<and> boolify i2)"
-  by (simp add: boolify_def unboolify_def)
-
-lemma [simp]: "unboolify (boolify i2 \<or> boolify i1) = unboolify (boolify i1 \<or> boolify i2)"
-  by (simp add: boolify_def unboolify_def)
-
 end

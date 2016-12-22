@@ -27,7 +27,7 @@ fun eval_assembly :: "assembly_program \<Rightarrow> assembly_state \<Rightarrow
       \<pi>, s, \<omega>))"
 | "eval_assembly \<Pi> (\<mu>, None, d, CAssm dst cmp # \<pi>, s, \<omega>) = None"
 | "eval_assembly \<Pi> (\<mu>, a, d, JAssm jmp s # \<pi>, s', \<omega>) = (
-    if should_jump d jmp
+    if compare d jmp
     then case \<Pi> s of 
         Some (\<pi>', s'') \<Rightarrow> Some (\<mu>, None, d, \<pi>', s'', \<omega>)
       | None \<Rightarrow> None

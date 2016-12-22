@@ -12,8 +12,8 @@ datatype computation =
   Zero | One | NegOne | Reg register | NotR register | NegR register | Incr register | Decr register 
 | DPlusA | DPlusM | DMinusA | DMinusM | AMinusD | MMinusD | DAndA | DAndM | DOrA | DOrM
 
-fun should_jump :: "int \<Rightarrow> comparison set \<Rightarrow> bool" where
-  "should_jump n jmp = ((LT \<in> jmp \<and> n < 0) \<or> (EQ \<in> jmp \<and> n = 0) \<or> (GT \<in> jmp \<and> n > 0 ))"
+fun compare :: "int \<Rightarrow> comparison set \<Rightarrow> bool" where
+  "compare n jmp = ((LT \<in> jmp \<and> n < 0) \<or> (EQ \<in> jmp \<and> n = 0) \<or> (GT \<in> jmp \<and> n > 0))"
 
 fun compute :: "computation \<Rightarrow> int \<Rightarrow> int \<Rightarrow> int \<Rightarrow> int" where
   "compute Zero m a d = 0"

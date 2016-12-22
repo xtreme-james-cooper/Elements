@@ -28,7 +28,7 @@ fun eval_b_assembly :: "b_assembly_program \<Rightarrow> b_assembly_state \<Righ
       \<pi>, s, \<omega>))"
 | "eval_b_assembly \<Pi> (\<mu>, None, d, CBAssm dst cmp # \<pi>, s, \<omega>) = None"
 | "eval_b_assembly \<Pi> (\<mu>, a, d, IBAssm jmp \<pi>\<^sub>t \<pi>\<^sub>f # \<pi>, s, \<omega>) = 
-    Some (\<mu>, None, d, (if should_jump d jmp then \<pi>\<^sub>t else \<pi>\<^sub>f) @ \<pi>, s, \<omega>)"
+    Some (\<mu>, None, d, (if compare d jmp then \<pi>\<^sub>t else \<pi>\<^sub>f) @ \<pi>, s, \<omega>)"
 | "eval_b_assembly \<Pi> (\<mu>, a, d, PBAssm # \<pi>, s, \<omega>) = Some (\<mu>, a, d, \<pi>, s, d # \<omega>)"
 
 fun b_assembly_output :: "b_assembly_state \<Rightarrow> output" where

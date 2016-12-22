@@ -259,7 +259,7 @@ lemma debranch_step: "finite (dom \<Pi>) \<Longrightarrow> eval_b_assembly \<Pi>
     with CF have SI: "state_convert (dom \<Pi>) (\<mu>, a, d, IBAssm jmp \<pi>\<^sub>B\<^sub>t \<pi>\<^sub>B\<^sub>f # \<pi>\<^sub>B, s, \<omega>) = 
         (\<mu>, a, d, JAssm jmp s\<^sub>t # \<pi>\<^sub>A\<^sub>f', s\<^sub>f', \<omega>)" by simp
     thus ?case
-      proof (cases "should_jump d jmp")
+      proof (cases "compare d jmp")
       case True
 
 

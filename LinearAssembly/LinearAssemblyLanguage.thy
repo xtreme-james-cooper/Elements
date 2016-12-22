@@ -19,7 +19,7 @@ fun eval_l_assembly :: "l_assembly_program \<Rightarrow> l_assembly_state \<Righ
       \<pi>, \<omega>))"
 | "eval_l_assembly \<Pi> (\<mu>, None, d, CAssm dst cmp # \<pi>, \<omega>) = None"
 | "eval_l_assembly \<Pi> (\<mu>, a, d, JAssm jmp s # \<pi>, \<omega>) = (
-    if should_jump d jmp
+    if compare d jmp
     then case lookup \<Pi> s of 
         Some \<pi>' \<Rightarrow> Some (\<mu>, None, d, \<pi>', \<omega>)
       | None \<Rightarrow> None
