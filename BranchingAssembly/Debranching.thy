@@ -6,8 +6,8 @@ imports
   "../Utilities/FiniteMap"
 begin
 
-fun branch_instr_convert :: "code_label set \<Rightarrow> b_assembly list \<Rightarrow> code_label \<Rightarrow> 
-    assembly list \<times> code_label \<times> (code_label \<rightharpoonup> assembly list \<times> code_label)" where
+fun branch_instr_convert :: "code_label\<^sub>2 set \<Rightarrow> b_assembly list \<Rightarrow> code_label\<^sub>2 \<Rightarrow> 
+    assembly list \<times> code_label\<^sub>2 \<times> (code_label\<^sub>2 \<rightharpoonup> assembly list \<times> code_label\<^sub>2)" where
   "branch_instr_convert ss [] s = ([], s, empty)"
 | "branch_instr_convert ss (ABAssm x # \<pi>) s = (
     let (\<pi>', s', \<Pi>) = branch_instr_convert ss \<pi> s
@@ -16,16 +16,17 @@ fun branch_instr_convert :: "code_label set \<Rightarrow> b_assembly list \<Righ
     let (\<pi>', s', \<Pi>) = branch_instr_convert ss \<pi> s
     in (CAssm dst cmp # \<pi>', s', \<Pi>))"
 | "branch_instr_convert ss (IBAssm jmp \<pi>\<^sub>t \<pi>\<^sub>f # \<pi>) s = (
-    let s\<^sub>e = new_label ss
+    let s\<^sub>e = new_label\<^sub>2 ss
     in let (\<pi>', s', \<Pi>\<^sub>1) = branch_instr_convert (ss \<union> {s\<^sub>e}) \<pi> s
     in let (\<pi>\<^sub>t', s\<^sub>t, \<Pi>\<^sub>2) = branch_instr_convert (ss \<union> dom \<Pi>\<^sub>1 \<union> {s\<^sub>e}) \<pi>\<^sub>t s\<^sub>e
     in let (\<pi>\<^sub>f', s\<^sub>f, \<Pi>\<^sub>3) = branch_instr_convert (ss \<union> dom \<Pi>\<^sub>1 \<union> dom \<Pi>\<^sub>2 \<union> {s\<^sub>e}) \<pi>\<^sub>f s\<^sub>e
     in (JAssm jmp s\<^sub>t # \<pi>\<^sub>f', s\<^sub>f, \<Pi>\<^sub>1 ++ \<Pi>\<^sub>2 ++ \<Pi>\<^sub>3 ++ [s\<^sub>t \<mapsto> (\<pi>\<^sub>t', s\<^sub>t), s\<^sub>e \<mapsto> (\<pi>', s')]))"
+| "branch_instr_convert ss (JBAssm s' # \<pi>) s = ([], s', empty)"
 | "branch_instr_convert ss (PBAssm # \<pi>) s = (
     let (\<pi>', s', \<Pi>) = branch_instr_convert ss \<pi> s
     in (PAssm # \<pi>', s', \<Pi>))"
 
-fun block_convert :: "code_label set \<Rightarrow> code_label \<times> b_assembly list \<times> code_label \<Rightarrow> 
+fun block_convert :: "code_label\<^sub>2 set \<Rightarrow> code_label\<^sub>2 \<times> b_assembly list \<times> code_label\<^sub>2 \<Rightarrow> 
     assembly_program \<Rightarrow> assembly_program" where
   "block_convert ss (s, \<pi>, s') \<Pi> = (
     let (\<pi>', s'', \<Pi>') = branch_instr_convert (ss \<union> dom \<Pi>) \<pi> s' 
@@ -34,8 +35,8 @@ fun block_convert :: "code_label set \<Rightarrow> code_label \<times> b_assembl
 definition debranch :: "b_assembly_program \<Rightarrow> assembly_program" where
   "debranch \<Pi> = finite_map_fold (block_convert (dom \<Pi>)) empty \<Pi>"
 
-function remove_continuations :: "assembly list \<Rightarrow> code_label \<Rightarrow> assembly_program \<Rightarrow> 
-    (assembly list \<times> code_label)" where
+function remove_continuations :: "assembly list \<Rightarrow> code_label\<^sub>2 \<Rightarrow> assembly_program \<Rightarrow> 
+    (assembly list \<times> code_label\<^sub>2)" where
   "\<not> finite (dom \<Pi>) \<Longrightarrow> remove_continuations \<pi> s \<Pi> = (\<pi>, s)"
 | "finite (dom \<Pi>) \<Longrightarrow> remove_continuations \<pi> s \<Pi> = (case \<Pi> s of 
         Some (\<pi>', s') \<Rightarrow> remove_continuations (\<pi> @ \<pi>') s' (\<Pi>(s := None))
@@ -44,7 +45,7 @@ function remove_continuations :: "assembly list \<Rightarrow> code_label \<Right
 termination
   by (relation "measure (card o dom o snd o snd)") (auto, meson card_Diff1_less domI)
 
-fun state_convert :: "code_label set \<Rightarrow> b_assembly_state \<Rightarrow> assembly_state" where
+fun state_convert :: "code_label\<^sub>2 set \<Rightarrow> b_assembly_state \<Rightarrow> assembly_state" where
   "state_convert ss (\<mu>, a, d, \<pi>, s, \<omega>) = (
     let (\<pi>', s', \<Pi>') = branch_instr_convert ss \<pi> s
     in let (\<pi>'', s'') = remove_continuations \<pi>' s' \<Pi>'
@@ -61,7 +62,7 @@ lemma [simp]: "branch_instr_convert ss \<pi>\<^sub>B s = (\<pi>\<^sub>A, s', \<P
   next case 3
     thus ?case by (simp split: prod.splits)
   next case (4 ss jmp \<pi>\<^sub>B\<^sub>t \<pi>\<^sub>B\<^sub>f \<pi>\<^sub>B s)
-    let ?s\<^sub>e = "new_label ss"
+    let ?s\<^sub>e = "new_label\<^sub>2 ss"
     have "finite (dom \<Pi>)"
       proof (cases "branch_instr_convert (ss \<union> {?s\<^sub>e}) \<pi>\<^sub>B s")
       case (fields \<pi>' s'' \<Pi>\<^sub>1) note F1 = fields
@@ -77,6 +78,8 @@ lemma [simp]: "branch_instr_convert ss \<pi>\<^sub>B s = (\<pi>\<^sub>A, s', \<P
       qed
     thus ?case by simp
   next case 5
+    thus ?case by auto
+  next case 6
     thus ?case by (simp split: prod.splits)
   qed
 
@@ -86,7 +89,7 @@ lemma finite_block_convert: "finite (dom \<Pi>) \<Longrightarrow> finite ss \<Lo
 
 lemma [simp]: "finite ss \<Longrightarrow> ss \<supseteq> dom \<Pi> \<Longrightarrow> 
     finite (dom (finite_map_fold (block_convert ss) empty \<Pi>))"
-  proof (induction "block_convert ss" "empty :: code_label \<Rightarrow> (assembly list \<times> code_label) option" \<Pi> 
+  proof (induction "block_convert ss" "empty :: code_label\<^sub>2 \<Rightarrow> (assembly list \<times> code_label\<^sub>2) option" \<Pi> 
          rule: finite_map_fold.induct)
   case 1
     thus ?case by (metis finite_subset)
@@ -137,7 +140,7 @@ lemma [simp]: "finite ss \<Longrightarrow> ss \<supseteq> dom \<Pi> \<Longrighta
   branch_instr_convert ss \<pi>\<^sub>B s' = (\<pi>\<^sub>A, s'', \<Pi>') \<Longrightarrow> 
     remove_continuations \<pi>\<^sub>A s'' \<Pi>' = (\<pi>\<^sub>A', s''') \<Longrightarrow> 
       finite_map_fold (block_convert ss) empty \<Pi> s = Some (\<pi>\<^sub>A', s''')"
-  proof (induction "block_convert ss" "empty :: code_label \<Rightarrow> (assembly list \<times> code_label) option" \<Pi> 
+  proof (induction "block_convert ss" "empty :: code_label\<^sub>2 \<Rightarrow> (assembly list \<times> code_label\<^sub>2) option" \<Pi> 
          rule: finite_map_fold.induct)
   case 1
     thus ?case by (metis finite_subset)
@@ -243,7 +246,7 @@ lemma debranch_step: "finite (dom \<Pi>) \<Longrightarrow> eval_b_assembly \<Pi>
   next case 4
     thus ?case by simp
   next case (5 \<Pi> \<mu> a d jmp \<pi>\<^sub>B\<^sub>t \<pi>\<^sub>B\<^sub>f \<pi>\<^sub>B s \<omega>)    
-    let ?s\<^sub>e = "new_label (dom \<Pi>)"
+    let ?s\<^sub>e = "new_label\<^sub>2 (dom \<Pi>)"
     obtain \<pi>\<^sub>A s' \<Pi>\<^sub>1 where B: "branch_instr_convert (dom \<Pi> \<union> {?s\<^sub>e}) \<pi>\<^sub>B s = (\<pi>\<^sub>A, s', \<Pi>\<^sub>1)" 
       by (cases "branch_instr_convert (dom \<Pi> \<union> {?s\<^sub>e}) \<pi>\<^sub>B s") simp
     obtain \<pi>\<^sub>A\<^sub>t s\<^sub>t \<Pi>\<^sub>2 where BT: "branch_instr_convert (dom \<Pi> \<union> dom \<Pi>\<^sub>1 \<union> {?s\<^sub>e}) \<pi>\<^sub>B\<^sub>t ?s\<^sub>e = (\<pi>\<^sub>A\<^sub>t, s\<^sub>t, \<Pi>\<^sub>2)"
@@ -277,7 +280,21 @@ have "state_convert (dom \<Pi>) (\<mu>, None, d, \<pi>\<^sub>B\<^sub>f @ \<pi>\<
         have "(\<mu>, None, d, \<pi>\<^sub>A\<^sub>f', s\<^sub>f', \<omega>) = state_convert (dom \<Pi>) (\<mu>, None, d, \<pi>\<^sub>B\<^sub>f @ \<pi>\<^sub>B, s, \<omega>)" by simp
         with 5 SI False show ?thesis by auto
       qed
-  next case (6 \<Pi> \<mu> a d \<pi>\<^sub>B s \<omega>)
+  next case (6 \<Pi> \<mu> a d s \<pi> s' \<omega>)
+    then obtain ps where "\<Pi> s = Some ps" by (cases "\<Pi> s") simp_all
+    then obtain \<pi>\<^sub>B s' where PS: "\<Pi> s = Some (\<pi>\<^sub>B, s')" by (cases ps) simp
+
+
+
+
+have "state_convert (dom \<Pi>) (\<mu>, None, d, \<pi>\<^sub>B, s', \<omega>) = (
+    let (\<pi>', s', \<Pi>') = branch_instr_convert (dom \<Pi>) \<pi>\<^sub>B s'
+    in let (\<pi>'', s'') = remove_continuations \<pi>' s' \<Pi>'
+    in (\<mu>, None, d, \<pi>'', s'', \<omega>))" by simp
+
+    have "eval_assembly (debranch \<Pi>) (\<mu>, a, d, [], s, \<omega>) = Some (state_convert (dom \<Pi>) (\<mu>, None, d, \<pi>\<^sub>B, s', \<omega>))" by simp
+    with 6 PS show ?case by simp
+  next case (7 \<Pi> \<mu> a d \<pi>\<^sub>B s \<omega>)
     obtain \<pi>\<^sub>A s' \<Pi>' where B: "branch_instr_convert (dom \<Pi>) \<pi>\<^sub>B s = (\<pi>\<^sub>A, s', \<Pi>')"
       by (cases "branch_instr_convert (dom \<Pi>) \<pi>\<^sub>B s") simp
     obtain \<pi>\<^sub>A' s'' where C: "remove_continuations \<pi>\<^sub>A s' \<Pi>' = (\<pi>\<^sub>A', s'')"
@@ -286,7 +303,7 @@ have "state_convert (dom \<Pi>) (\<mu>, None, d, \<pi>\<^sub>B\<^sub>f @ \<pi>\<
       (\<mu>, a, d, PAssm # \<pi>\<^sub>A', s'', \<omega>)" by simp
     from B C have "state_convert (dom \<Pi>) (\<mu>, a, d, \<pi>\<^sub>B, s, d # \<omega>) = (\<mu>, a, d, \<pi>\<^sub>A', s'', d # \<omega>)" 
       by simp
-    with 6 A show ?case by simp
+    with 7 A show ?case by simp
   qed 
 
 theorem debranching_correct [simp]: "iterate (eval_b_assembly \<Pi>) \<Sigma>\<^sub>B \<Sigma>\<^sub>B' \<Longrightarrow> finite (dom \<Pi>) \<Longrightarrow> 

@@ -12,16 +12,16 @@ primrec converted_length :: "assembly list \<Rightarrow> nat" where
   "converted_length [] = 0"
 | "converted_length (\<iota> # \<pi>) = machine_length \<iota> + converted_length \<pi>"
 
-fun build_symbol_table :: "l_assembly_program \<Rightarrow> code_label \<rightharpoonup> nat" where
+fun build_symbol_table :: "l_assembly_program \<Rightarrow> code_label\<^sub>2 \<rightharpoonup> nat" where
   "build_symbol_table [] s = None"
 | "build_symbol_table ((s', \<pi>) # \<Pi>) s = (
     if s' = s then Some 0 
     else map_option (op + (converted_length \<pi>)) (build_symbol_table \<Pi> s))"
 
-definition get_block_addr :: "(code_label \<rightharpoonup> nat) \<Rightarrow> code_label \<Rightarrow> int" where
+definition get_block_addr :: "(code_label\<^sub>2 \<rightharpoonup> nat) \<Rightarrow> code_label\<^sub>2 \<Rightarrow> int" where
   "get_block_addr \<rho> s = int (the (\<rho> s))"
 
-primrec instruction_conv :: "(code_label \<rightharpoonup> nat) \<Rightarrow> assembly \<Rightarrow> machine_program" where
+primrec instruction_conv :: "(code_label\<^sub>2 \<rightharpoonup> nat) \<Rightarrow> assembly \<Rightarrow> machine_program" where
   "instruction_conv \<rho> (AAssm x) = [AInstr x]"
 | "instruction_conv \<rho> (CAssm dst cmp) = [CInstr dst cmp {}]"
 | "instruction_conv \<rho> (JAssm jmp s) = [AInstr (get_block_addr \<rho> s), CInstr {} (Reg D) jmp]"

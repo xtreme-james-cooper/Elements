@@ -5,7 +5,7 @@ begin
 type_synonym l_assembly_state = "memory \<times> int option \<times> int \<times> assembly list \<times> output" 
   (* \<mu>, a, d, \<pi>, \<omega> *)
 
-type_synonym l_assembly_program = "code_label \<leadsto> assembly list"
+type_synonym l_assembly_program = "code_label\<^sub>2 \<leadsto> assembly list"
 
 fun eval_l_assembly :: "l_assembly_program \<Rightarrow> l_assembly_state \<Rightarrow> l_assembly_state option" where
   "eval_l_assembly \<Pi> (\<mu>, a, d, [], \<omega>) = None"

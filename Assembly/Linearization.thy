@@ -5,7 +5,7 @@ begin
 fun state_convert :: "assembly_state \<Rightarrow> l_assembly_state" where
   "state_convert (\<mu>, a, d, \<pi>, s, \<omega>) = (\<mu>, a, d, \<pi> @ [JAssm {EQ, GT, LT} s], \<omega>)"
 
-fun linearize_step :: "code_label \<times> assembly list \<times> code_label \<Rightarrow> l_assembly_program \<Rightarrow> 
+fun linearize_step :: "code_label\<^sub>2 \<times> assembly list \<times> code_label\<^sub>2 \<Rightarrow> l_assembly_program \<Rightarrow> 
     l_assembly_program" where
   "linearize_step (s, \<pi>, s') \<Pi> = (s, \<pi> @ [JAssm {EQ, GT, LT} s']) # \<Pi>"
 
@@ -19,7 +19,7 @@ lemma [simp]: "l_assembly_output (state_convert \<Sigma>\<^sub>A) = assembly_out
 
 lemma [simp]: "finite (dom \<Pi>) \<Longrightarrow> \<Pi> x = None \<Longrightarrow> 
     lookup (finite_map_fold linearize_step [] \<Pi>) x = None"
-  proof (induction linearize_step "[]::code_label \<leadsto> assembly list" \<Pi> rule: finite_map_fold.induct)
+  proof (induction linearize_step "[]::code_label\<^sub>2 \<leadsto> assembly list" \<Pi> rule: finite_map_fold.induct)
   case 1
     thus ?case by metis
   next case 2
@@ -34,7 +34,7 @@ lemma [simp]: "finite (dom \<Pi>) \<Longrightarrow> \<Pi> x = None \<Longrightar
 
 lemma [simp]: "finite (dom \<Pi>) \<Longrightarrow> \<Pi> x = Some (\<pi>, s) \<Longrightarrow> 
     lookup (finite_map_fold linearize_step [] \<Pi>) x = Some (\<pi> @ [JAssm {EQ, GT, LT} s])"
-  proof (induction linearize_step "[]::code_label \<leadsto> assembly list" \<Pi> rule: finite_map_fold.induct)
+  proof (induction linearize_step "[]::code_label\<^sub>2 \<leadsto> assembly list" \<Pi> rule: finite_map_fold.induct)
   case 1
     thus ?case by metis
   next case 2
@@ -59,7 +59,7 @@ lemma [simp]: "finite (dom \<Pi>) \<Longrightarrow> \<Pi> x = Some (\<pi>, s) \<
   by (simp add: linearize_def)
 
 lemma [simp]: "finite (dom \<Pi>) \<Longrightarrow> domain_distinct (finite_map_fold linearize_step [] \<Pi>)"
-  proof (induction linearize_step "[]::code_label \<leadsto> assembly list" \<Pi> rule: finite_map_fold.induct)
+  proof (induction linearize_step "[]::code_label\<^sub>2 \<leadsto> assembly list" \<Pi> rule: finite_map_fold.induct)
   case 1
     thus ?case by metis
   next case 2

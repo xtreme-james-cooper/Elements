@@ -5,12 +5,12 @@ begin
 datatype assembly =
   AAssm int
 | CAssm "register set" computation
-| JAssm "comparison set" code_label
+| JAssm "comparison set" code_label\<^sub>2
 | PAssm
 
-type_synonym assembly_program = "code_label \<rightharpoonup> assembly list \<times> code_label"
+type_synonym assembly_program = "code_label\<^sub>2 \<rightharpoonup> assembly list \<times> code_label\<^sub>2"
 
-type_synonym assembly_state = "memory \<times> int option \<times> int \<times> assembly list \<times> code_label \<times> output" 
+type_synonym assembly_state = "memory \<times> int option \<times> int \<times> assembly list \<times> code_label\<^sub>2 \<times> output" 
   (* \<mu>, a, d, \<pi>, s, \<omega> *)
 
 fun eval_assembly :: "assembly_program \<Rightarrow> assembly_state \<Rightarrow> assembly_state option" where
