@@ -1,5 +1,5 @@
 theory StackLanguage
-imports "../Utilities/BasicComputation"
+imports "../Utilities/BasicComputation" "../Utilities/Iterate"
 begin
 
 datatype address = 
@@ -23,18 +23,19 @@ datatype stack_value =
   IntV int
 | Bool bool
 
-datatype frame = Frame function_name 
-  "stack_value list" (* arguments *)
-  "stack_value list" (* local variables *)
-  "stack_value list" (* saved stack *)
+record frame = 
+  name :: function_name 
+  arguments :: "stack_value list"
+  locals :: "stack_value list"
+  saved_stack :: "stack_value list"
 
 type_synonym stack_state = 
   "stack_value list \<times> frame list \<times> stack_instruction list \<times> code_label \<times> output" 
   (* \<sigma>, \<phi>, \<pi>, s, \<omega> *)
 
 inductive eval_stack :: "stack_program \<Rightarrow> stack_state \<Rightarrow> stack_state \<Rightarrow> bool" where
-  evs_jump [simp]: "\<Pi> f = Some (a, l, \<Phi>) \<Longrightarrow> \<Phi> s = Some (\<pi>, s') \<Longrightarrow> 
-    eval_stack \<Pi> (\<sigma>, Frame f as ls \<sigma>' # \<phi>, [], s, \<omega>) (\<sigma>, Frame f as ls \<sigma>' # \<phi>, \<pi>, s', \<omega>)"
+  evs_jump [simp]: "\<Pi> (frame.name f) = Some (a, l, \<Phi>) \<Longrightarrow> \<Phi> s = Some (\<pi>, s') \<Longrightarrow> 
+    eval_stack \<Pi> ([], f # \<phi>, [], s, \<omega>) ([], f # \<phi>, \<pi>, s', \<omega>)"
 | evs_add [simp]: "eval_stack \<Pi> (IntV i1 # IntV i2 # \<sigma>, \<phi>, Add # \<pi>, s, \<omega>) 
     (IntV (i1 + i2) # \<sigma>, \<phi>, \<pi>, s, \<omega>)"
 | evs_sub [simp]: "eval_stack \<Pi> (IntV i1 # IntV i2 # \<sigma>, \<phi>, Sub # \<pi>, s, \<omega>) 
@@ -52,26 +53,52 @@ inductive eval_stack :: "stack_program \<Rightarrow> stack_state \<Rightarrow> s
     (Bool (i2 \<or> i1) # \<sigma>, \<phi>, \<pi>, s, \<omega>)"
 | evs_not [simp]: "eval_stack \<Pi> (Bool i1 # \<sigma>, \<phi>, Not # \<pi>, s, \<omega>) (Bool (\<not> i1) # \<sigma>, \<phi>, \<pi>, s, \<omega>)"
 | evs_push_c [simp]: "eval_stack \<Pi> (\<sigma>, \<phi>, Push (Constant i) # \<pi>, s, \<omega>) (IntV i # \<sigma>, \<phi>, \<pi>, s, \<omega>)"
-| evs_push_l [simp]: "eval_stack \<Pi> (\<sigma>, Frame f as ls \<sigma>' # \<phi>, Push (Local n) # \<pi>, s, \<omega>) 
-    (ls ! n # \<sigma>, Frame f as ls \<sigma>' # \<phi>, \<pi>, s, \<omega>)"
-| evs_push_a [simp]: "eval_stack \<Pi> (\<sigma>, Frame f as ls \<sigma>' # \<phi>, Push (Argument n) # \<pi>, s, \<omega>) 
-    (as ! n # \<sigma>, Frame f as ls \<sigma>' # \<phi>, \<pi>, s, \<omega>)"
-| evs_pop_l [simp]: "eval_stack \<Pi> (v # \<sigma>, Frame f as ls \<sigma>' # \<phi>, Pop (Local n) # \<pi>, s, \<omega>) 
-    (\<sigma>, Frame f as (ls[n := v]) \<sigma>' # \<phi>, \<pi>, s, \<omega>)"
-| evs_pop_a [simp]: "eval_stack \<Pi> (v # \<sigma>, Frame f as ls \<sigma>' # \<phi>, Pop (Argument n) # \<pi>, s, \<omega>) 
-    (\<sigma>, Frame f (as[n := v]) ls \<sigma>' # \<phi>, \<pi>, s, \<omega>)"
+| evs_push_l [simp]: "eval_stack \<Pi> (\<sigma>, f # \<phi>, Push (Local n) # \<pi>, s, \<omega>) 
+    (frame.locals f ! n # \<sigma>, f # \<phi>, \<pi>, s, \<omega>)"
+| evs_push_a [simp]: "eval_stack \<Pi> (\<sigma>, f # \<phi>, Push (Argument n) # \<pi>, s, \<omega>) 
+    (frame.arguments f ! n # \<sigma>, f# \<phi>, \<pi>, s, \<omega>)"
+| evs_pop_l [simp]: "eval_stack \<Pi> (v # \<sigma>, f # \<phi>, Pop (Local n) # \<pi>, s, \<omega>) 
+    (\<sigma>, f \<lparr> locals := frame.locals f [n := v] \<rparr> # \<phi>, \<pi>, s, \<omega>)"
+| evs_pop_a [simp]: "eval_stack \<Pi> (v # \<sigma>, f # \<phi>, Pop (Argument n) # \<pi>, s, \<omega>) 
+    (\<sigma>, f \<lparr> arguments := frame.arguments f [n := v] \<rparr> # \<phi>, \<pi>, s, \<omega>)"
 | evs_if_t [simp]: "eval_stack \<Pi> (Bool True # \<sigma>, \<phi>, IfJ \<pi>\<^sub>t \<pi>\<^sub>f # \<pi>, s, \<omega>) (\<sigma>, \<phi>, \<pi>\<^sub>t @ \<pi>, s, \<omega>)"
 | evs_if_f [simp]: "eval_stack \<Pi> (Bool False # \<sigma>, \<phi>, IfJ \<pi>\<^sub>t \<pi>\<^sub>f # \<pi>, s, \<omega>) (\<sigma>, \<phi>, \<pi>\<^sub>f @ \<pi>, s, \<omega>)"
-| evs_goto [simp]: "\<Pi> f = Some (a, l, \<Phi>) \<Longrightarrow> \<Phi> s = Some (\<pi>, s') \<Longrightarrow> 
-    eval_stack \<Pi> (\<sigma>, Frame f as ls \<sigma>' # \<phi>, Goto s # \<pi>, s'', \<omega>) (\<sigma>, Frame f as ls \<sigma>' # \<phi>, \<pi>', s', \<omega>)"
-| evs_call [simp]: "\<Pi> f = Some (a, l, \<Phi>) \<Longrightarrow> 
-    eval_stack \<Pi> (\<sigma>, \<phi>, Call f # \<pi>, s, \<omega>) ([], Frame f (take a \<sigma>) 
-      (repeat (IntV 0) l) (drop a \<sigma>) # \<phi>, \<pi>, s, \<omega>)"
-| evs_return [simp]: 
-    "eval_stack \<Pi> (v # \<sigma>, Frame f as ls \<sigma>' # \<phi>, Return # \<pi>, s, \<omega>) (v # \<sigma>', \<phi>, \<pi>, s, \<omega>)"
+| evs_goto [simp]: "\<Pi> (frame.name f) = Some (a, l, \<Phi>) \<Longrightarrow> \<Phi> s = Some (\<pi>', s') \<Longrightarrow> 
+    eval_stack \<Pi> ([], f # \<phi>, Goto s # \<pi>, s'', \<omega>) ([], f # \<phi>, \<pi>', s', \<omega>)"
+| evs_call [simp]: "\<Pi> f = Some (a, l, \<Phi>) \<Longrightarrow> length \<sigma> \<ge> a \<Longrightarrow> eval_stack \<Pi> (\<sigma>, \<phi>, Call f # \<pi>, s, \<omega>) 
+    ([], \<lparr> name = f, arguments = take a \<sigma>, locals = repeat (IntV 0) l, saved_stack = (drop a \<sigma>) \<rparr> # \<phi>, 
+      \<pi>, s, \<omega>)"
+| evs_return [simp]: "eval_stack \<Pi> (v # [], f # \<phi>, Return # \<pi>, s, \<omega>) 
+    (v # frame.saved_stack f, \<phi>, \<pi>, s, \<omega>)"
 | evs_print [simp]: "eval_stack \<Pi> (IntV i1 # \<sigma>, \<phi>, Print # \<pi>, s, \<omega>) (\<sigma>, \<phi>, \<pi>, s, i1 # \<omega>)"
 
 fun stack_output :: "stack_state \<Rightarrow> output" where
   "stack_output (\<sigma>, \<phi>, \<pi>, s, \<omega>) = \<omega>"
+
+(* state validity *)
+
+fun valid_frame :: "stack_program \<Rightarrow> frame \<Rightarrow> bool" where
+  "valid_frame \<Pi> \<lparr> name = f, arguments = as, locals = ls, saved_stack = \<sigma> \<rparr> = (case \<Pi> f of
+      Some (a, l, \<Phi>) \<Rightarrow> length as = a \<and> length ls = l
+    | None \<Rightarrow> False)"
+
+fun valid_state :: "stack_program \<Rightarrow> stack_state \<Rightarrow> bool" where
+  "valid_state \<Pi> (\<sigma>, \<phi>, \<pi>, s, \<omega>) = (\<forall>f \<in> set \<phi>. valid_frame \<Pi> f)"
+
+lemma [simp]: "valid_frame \<Pi> fr \<Longrightarrow> valid_frame \<Pi> (fr\<lparr>locals := locals fr[n := v]\<rparr>)"
+  by (cases fr) (auto split: option.splits)
+
+lemma [simp]: "valid_frame \<Pi> fr \<Longrightarrow> valid_frame \<Pi> (fr\<lparr>arguments := arguments fr[n := v]\<rparr>)"
+  by (cases fr) (auto split: option.splits)
+
+lemma [simp]: "valid_frame \<Pi> fr \<Longrightarrow> \<Pi> (frame.name fr) = Some (a, l, \<Phi>) \<Longrightarrow> 
+    length (frame.locals fr) = l"
+  by (cases fr) simp
+
+lemma [simp]: "eval_stack \<Pi> \<Sigma> \<Sigma>' \<Longrightarrow> valid_state \<Pi> \<Sigma> \<Longrightarrow> valid_state \<Pi> \<Sigma>'"
+  by (induction \<Pi> \<Sigma> \<Sigma>' rule: eval_stack.induct) simp_all
+
+lemma [simp]: "iterate_ind (eval_stack \<Pi>) \<Sigma> \<Sigma>' \<Longrightarrow> valid_state \<Pi> \<Sigma> \<Longrightarrow> valid_state \<Pi> \<Sigma>'"
+  by (induction "eval_stack \<Pi>" \<Sigma> \<Sigma>' rule: iterate_ind.induct) simp_all
 
 end

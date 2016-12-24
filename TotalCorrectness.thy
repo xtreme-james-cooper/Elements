@@ -32,8 +32,8 @@ theorem output_equivalence: "\<Sigma>\<^sub>M \<in> state_convert \<Pi> \<Sigma>
     thus ?thesis by auto
   qed
 
-theorem total_correctness: "finite (dom \<Pi>) \<Longrightarrow> iterate_ind (eval_stack \<Pi>) \<Sigma>\<^sub>S \<Sigma>\<^sub>S' \<Longrightarrow> 
-  \<Sigma>\<^sub>M \<in> state_convert \<Pi> \<Sigma>\<^sub>S \<Longrightarrow> 
+theorem total_correctness: "finite (dom \<Pi>) \<Longrightarrow> valid_state \<Pi> \<Sigma>\<^sub>S \<Longrightarrow> 
+  iterate_ind (eval_stack \<Pi>) \<Sigma>\<^sub>S \<Sigma>\<^sub>S' \<Longrightarrow> \<Sigma>\<^sub>M \<in> state_convert \<Pi> \<Sigma>\<^sub>S \<Longrightarrow> 
     \<exists>\<Sigma>\<^sub>M'. \<Sigma>\<^sub>M' \<in> state_convert \<Pi> \<Sigma>\<^sub>S' \<and> iterate (eval_machine (program_convert \<Pi>)) \<Sigma>\<^sub>M \<Sigma>\<^sub>M'"
   proof -
     assume D: "finite (dom \<Pi>)"
@@ -51,7 +51,8 @@ theorem total_correctness: "finite (dom \<Pi>) \<Longrightarrow> iterate_ind (ev
         \<Sigma>\<^sub>M \<in> AssemblyToMachine.state_convert (linearize ?\<Pi>\<^sub>A) 
           (Linearization.state_convert (Debranching.state_convert (dom ?\<Pi>\<^sub>B) \<Sigma>\<^sub>B))" 
       by blast
-    with ES stack_to_assembly_correct flattening_correct obtain \<Sigma>\<^sub>B' where SB': 
+    assume "valid_state \<Pi> \<Sigma>\<^sub>S"
+    with ES B stack_to_assembly_correct flattening_correct obtain \<Sigma>\<^sub>B' where SB': 
       "\<Sigma>\<^sub>B' \<in> StackToAssembly.state_convert (Flattening.state_convert \<Sigma>\<^sub>S') \<and> 
         iterate (eval_b_assembly ?\<Pi>\<^sub>B) \<Sigma>\<^sub>B \<Sigma>\<^sub>B'" by blast
     with ES DA B debranching_correct have SA': "iterate (eval_assembly ?\<Pi>\<^sub>A)

@@ -25,6 +25,9 @@ definition boolify :: "int \<Rightarrow> bool" where
 definition unboolify :: "bool \<Rightarrow> int" where
   "unboolify b = (if b then 1 else 0)"
 
+lemma [simp]: "length (repeat v n) = n"
+  by (induction n) simp_all
+
 lemma [simp]: "unboolify True = 1"
   by (simp add: unboolify_def)
 
