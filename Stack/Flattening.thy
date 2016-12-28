@@ -22,9 +22,9 @@ fun instruction_convert :: "function_name \<Rightarrow> nat \<Rightarrow> nat \<
     FDup (ss + ls + v) # instruction_convert f (Suc ss) ls \<pi>"
 | "instruction_convert f ss ls (Pop (Constant i) # \<pi>) = FUpd 0 # instruction_convert f (ss - 1) ls \<pi>"
 | "instruction_convert f ss ls (Pop (Local v) # \<pi>) = 
-    FUpd (ss + v) # instruction_convert f (ss - 1) ls \<pi>"
+    FUpd (ss - 1 + v) # instruction_convert f (ss - 1) ls \<pi>"
 | "instruction_convert f ss ls (Pop (Argument v) # \<pi>) = 
-    FUpd (ss + ls + v) # instruction_convert f (ss - 1) ls \<pi>"
+    FUpd (ss - 1 + ls + v) # instruction_convert f (ss - 1) ls \<pi>"
 | "instruction_convert f ss ls (IfJ \<pi>\<^sub>t \<pi>\<^sub>f # \<pi>) = 
     FIf (instruction_convert f (ss - 1) ls \<pi>\<^sub>t) (instruction_convert f (ss - 1) ls \<pi>\<^sub>f) # 
       instruction_convert f 0 ls \<pi>"
@@ -47,7 +47,7 @@ definition flatten :: "stack_program \<Rightarrow> flat_stack_program" where
 
 definition flatten_frame :: "frame \<Rightarrow> int list" where
   "flatten_frame f = 
-    map stack_value_convert (frame.arguments f @ frame.locals f @ frame.saved_stack f)"
+    map stack_value_convert (frame.locals f @ frame.arguments f @ frame.saved_stack f)"
 
 fun state_convert :: "stack_state \<Rightarrow> flat_stack_state" where
   "state_convert (\<sigma>, \<phi>, \<pi>, s, \<omega>) = (
@@ -65,7 +65,6 @@ lemma [simp]: "flat_stack_output (state_convert \<Sigma>\<^sub>S) = stack_output
   qed
 
 lemma [simp]: "finite (dom \<Pi>) \<Longrightarrow> finite (dom (flatten \<Pi>))"
-  apply simp
   by simp
 
 lemma [simp]: "eval_flat_stack (flatten \<Pi>) (unboolify b1 # unboolify b2 # \<sigma>, FAnd # \<pi>, s, \<omega>) 
@@ -82,37 +81,70 @@ lemma [simp]: "eval_flat_stack (flatten \<Pi>) (unboolify b # \<sigma>, FNot # \
 
 lemma [simp]: "\<Pi> f = Some (a, l, \<Phi>) \<Longrightarrow> \<Phi> s = Some (\<pi>, s') \<Longrightarrow> 
     flatten \<Pi> (CL\<^sub>2 f s) = Some (instruction_convert f 0 l \<pi>, CL\<^sub>2 f s')"
-  by simp
+  by (simp add: flatten_def)
+
+lemma [simp]: "length (flatten_frame fr) = 
+    length (frame.arguments fr) + length (frame.locals fr) + length (frame.saved_stack fr)"
+  by (simp add: flatten_frame_def)
+
+lemma [simp]: "n < length (frame.locals fr) \<Longrightarrow> 
+    flatten_frame fr ! n = stack_value_convert (frame.locals fr ! n)"
+  by (simp add: flatten_frame_def nth_append)
+
+lemma [simp]: "n < length (frame.arguments ff) \<Longrightarrow> 
+    flatten_frame ff ! (length (frame.locals ff) + n) = stack_value_convert (frame.arguments ff ! n)"
+  by (simp add: flatten_frame_def nth_append)
 
 lemma [simp]: "eval_stack \<Pi> \<Sigma> \<Sigma>' \<Longrightarrow> valid_state \<Pi> \<Sigma> \<Longrightarrow>
     eval_flat_stack (flatten \<Pi>) (state_convert \<Sigma>) (state_convert \<Sigma>')"
   proof (induction \<Pi> \<Sigma> \<Sigma>' rule: eval_stack.induct)
-  case (evs_jump \<Pi> f a l \<Phi> s \<pi> s' \<phi> \<omega>)
-    from evs_jump have "\<Pi> (frame.name f) = Some (a, l, \<Phi>)" by simp
-    from evs_jump have "\<Phi> s = Some (\<pi>, s')" by simp
+  case (evs_jump \<Pi> f)
     from evs_jump have "valid_frame \<Pi> f" by simp
-    from evs_jump have "\<forall>fr \<in> set \<phi>. valid_frame \<Pi> fr" by simp
+    with evs_jump show ?case by (simp add: Let_def)
+  next case (evs_push_l n f \<Pi> \<sigma> \<phi> \<pi> s \<omega>)
+    hence "stack_value_convert (locals f ! n) = 
+        (map stack_value_convert \<sigma> @ flatten_frame f @ concat (map flatten_frame \<phi>)) ! (length \<sigma> + n)" 
+      by (simp add: nth_append)
+    with evs_push_l show ?case by (simp add: Let_def)
+  next case (evs_push_a n f \<Pi> \<sigma> \<phi> \<pi> s \<omega>)
+    hence "stack_value_convert (arguments f ! n) = 
+      (map stack_value_convert \<sigma> @ flatten_frame f @ concat (map flatten_frame \<phi>)) ! 
+        (length \<sigma> + length (locals f) + n)" by (simp add: nth_append)
+    with evs_push_a show ?case by (simp add: Let_def)
+  next case (evs_pop_l n f \<Pi> v \<sigma> \<phi> \<pi> s \<omega>)
+    let ?\<sigma> = "map stack_value_convert \<sigma> @ flatten_frame f @ concat (map flatten_frame \<phi>)"
+    let ?\<pi> = "instruction_convert (name f) (length \<sigma>) (length (locals f)) \<pi>"
+    from evs_pop_l have "eval_flat_stack (flatten \<Pi>)
+      (stack_value_convert v # ?\<sigma>, FUpd (length \<sigma> + n) # ?\<pi>, CL\<^sub>2 (name f) s, \<omega>) 
+      (?\<sigma>[length \<sigma> + n := stack_value_convert v], ?\<pi>, CL\<^sub>2 (name f) s, \<omega>)" by simp
+    with evs_pop_l have "eval_flat_stack (flatten \<Pi>)
+      (stack_value_convert v # ?\<sigma>, FUpd (length \<sigma> + n) # ?\<pi>, CL\<^sub>2 (name f) s, \<omega>)
+      (map stack_value_convert \<sigma> @ flatten_frame (f\<lparr>locals := locals f[n := v]\<rparr>) 
+        @ concat (map flatten_frame \<phi>), ?\<pi>, CL\<^sub>2 (name f) s, \<omega>)" 
+      by (simp add: flatten_frame_def list_update_append map_update)
+    thus ?case by (simp add: Let_def)
+  next case (evs_pop_a n f \<Pi> v \<sigma> \<phi> \<pi> s \<omega>) 
+    thus ?case by (simp add: Let_def)
+  next case (evs_if_t \<Pi> \<sigma> \<phi> \<pi>\<^sub>t \<pi>\<^sub>f \<pi> s \<omega>)
+    hence "valid_state \<Pi> (Bool True # \<sigma>, \<phi>, IfJ \<pi>\<^sub>t \<pi>\<^sub>f # \<pi>, s, \<omega>)" by simp
 
+    let ?\<sigma> = "map stack_value_convert \<sigma> @ concat (map flatten_frame \<phi>)"
+    let ?conv = "instruction_convert (name (hd \<phi>)) (length \<sigma>) (length (locals (hd \<phi>)))"
 
-have "flatten \<Pi> ss = Some (s\<pi>, ss') \<Longrightarrow> eval_flat_stack (flatten \<Pi>) (\<sigma>, [], ss, \<omega>) (\<sigma>, s\<pi>, ss', \<omega>)" by simp
 
     have "eval_flat_stack (flatten \<Pi>) 
-     (flatten_frame f @ concat (map flatten_frame \<phi>), [], CL\<^sub>2 (name f) s, \<omega>)
-     (flatten_frame f @ concat (map flatten_frame \<phi>), instruction_convert (name f) 0 (length (locals f)) \<pi>, CL\<^sub>2 (name f) s', \<omega>)" by simp
-    thus ?case by (simp add: Let_def)
-  next case (evs_push_l)
-    thus ?case by (simp add: Let_def)
-  next case (evs_push_a)
-    thus ?case by (simp add: Let_def)
-  next case (evs_pop_l)
-    thus ?case by (simp add: Let_def)
-  next case (evs_pop_a) 
-    thus ?case by (simp add: Let_def)
-  next case (evs_if_t)
+    (1 # ?\<sigma>, FIf (?conv \<pi>\<^sub>t) (?conv \<pi>\<^sub>f) # instruction_convert (name (hd \<phi>)) 0 (length (locals (hd \<phi>))) \<pi>, 
+     CL\<^sub>2 (name (hd \<phi>)) s, \<omega>) 
+    (?\<sigma>, (?conv \<pi>\<^sub>t) @ instruction_convert (name (hd \<phi>)) 0 (length (locals (hd \<phi>))) \<pi>, CL\<^sub>2 (name (hd \<phi>)) s, \<omega>)" by simp
+
+    have "eval_flat_stack (flatten \<Pi>)
+    (1 # ?\<sigma>, FIf (?conv \<pi>\<^sub>t) (?conv \<pi>\<^sub>f) # instruction_convert (name (hd \<phi>)) 0 (length (locals (hd \<phi>))) \<pi>,
+     CL\<^sub>2 (name (hd \<phi>)) s, \<omega>)
+    (?\<sigma>, ?conv (\<pi>\<^sub>t @ \<pi>), CL\<^sub>2 (name (hd \<phi>)) s, \<omega>)" by simp
     thus ?case by (simp add: Let_def)
   next case (evs_if_f)
     thus ?case by (simp add: Let_def)
-  next case (evs_goto \<Pi> f a l \<Phi> s \<pi> s' \<phi> \<pi>' s'' \<omega>)
+  next case (evs_goto \<Pi> f)
     hence "valid_frame \<Pi> f" by simp
     with evs_goto show ?case by (simp_all add: Let_def)
   next case (evs_call)

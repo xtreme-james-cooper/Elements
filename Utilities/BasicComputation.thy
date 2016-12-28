@@ -34,7 +34,10 @@ lemma [simp]: "unboolify True = 1"
 lemma [simp]: "unboolify False = 0"
   by (simp add: unboolify_def)
 
-lemma [simp]: "boolify (unboolify b) = b"
-  by (cases b) (simp_all add: boolify_def)
+lemma [simp]: "boolify 1 = True"
+  by (simp add: boolify_def)
+
+lemma [simp]: "boolify 0 = False"
+  by (simp add: boolify_def)
 
 end
