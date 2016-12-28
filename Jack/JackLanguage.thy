@@ -1,0 +1,91 @@
+theory JackLanguage
+imports Main
+begin
+
+typedecl variable
+
+datatype type = 
+  IntT | BoolT | CharT | UnitT 
+| ObjT variable "variable \<rightharpoonup> type" 
+| ArrayT type 
+| ArrowT "type list" type
+
+datatype binop = 
+  Plus | Minus | Times | Div
+| And | Or
+| Eq | Lt | Gt
+
+datatype expression =
+  IConst int
+| BConst bool
+| CConst char
+| Var variable
+| This | Null
+| Index expression expression 
+| Field expression variable 
+| Call expression variable "expression list"
+| Negate expression
+| Not expression
+| Binop binop expression expression
+
+datatype lvar =
+  LVar variable
+| LIndex lvar expression 
+| LField lvar variable 
+
+datatype statement = 
+  Let lvar expression
+| If expression "statement list" "statement list"
+| While expression "statement list"
+| Do expression variable "expression list"
+| Return expression
+
+inductive typecheck_binop :: "binop \<Rightarrow> type \<Rightarrow> type \<Rightarrow> bool" where
+  "typecheck_binop Plus IntT IntT"
+| "typecheck_binop Minus IntT IntT"
+| "typecheck_binop Times IntT IntT"
+| "typecheck_binop Div IntT IntT"
+| "typecheck_binop And BoolT BoolT"
+| "typecheck_binop Or BoolT BoolT"
+| "typecheck_binop Eq IntT BoolT"
+| "typecheck_binop Eq CharT BoolT"
+| "typecheck_binop Eq BoolT BoolT"
+| "typecheck_binop Gt IntT BoolT"
+| "typecheck_binop Lt IntT BoolT"
+
+inductive typecheck_expr :: "(variable \<rightharpoonup> type) \<Rightarrow> type \<Rightarrow> expression \<Rightarrow> type \<Rightarrow> bool" where
+  "typecheck_expr \<Gamma> this (IConst i) IntT"
+| "typecheck_expr \<Gamma> this (BConst b) BoolT"
+| "typecheck_expr \<Gamma> this (CConst b) CharT"
+| "\<Gamma> x = Some t \<Longrightarrow> typecheck_expr \<Gamma> this (Var x) t"
+| "typecheck_expr \<Gamma> this This this"
+| "typecheck_expr \<Gamma> this Null (ObjT that)"
+| "typecheck_expr \<Gamma> this e1 (ArrayT t) \<Longrightarrow> typecheck_expr \<Gamma> this e2 IntT \<Longrightarrow> 
+    typecheck_expr \<Gamma> this (Index e1 e2) t"
+| "typecheck_expr \<Gamma> this e (ObjT that) \<Longrightarrow> that x = Some t \<Longrightarrow> typecheck_expr \<Gamma> this (Field e x) t"
+| "typecheck_expr \<Gamma> this e (ObjT that) \<Longrightarrow> that x = Some (ArrowT ts t) \<Longrightarrow> 
+    \<forall>(e', t') \<in> set (zip es ts). typecheck_expr \<Gamma> this e' t' \<Longrightarrow> 
+      typecheck_expr \<Gamma> this (Call e x es) t"
+| "typecheck_expr \<Gamma> this e IntT \<Longrightarrow> typecheck_expr \<Gamma> this (Negate e) IntT"
+| "typecheck_expr \<Gamma> this e BoolT \<Longrightarrow> typecheck_expr \<Gamma> this (Not e) BoolT"
+| "typecheck_binop b t1 t2 \<Longrightarrow> typecheck_expr \<Gamma> this e1 t1 \<Longrightarrow> typecheck_expr \<Gamma> this e2 t1 \<Longrightarrow> 
+    typecheck_expr \<Gamma> this (Binop b e1 e2) t2"
+
+inductive typecheck_lval :: "(variable \<rightharpoonup> type) \<Rightarrow> type \<Rightarrow> lvar \<Rightarrow> type \<Rightarrow> bool" where
+  "\<Gamma> x = Some t \<Longrightarrow> typecheck_lval \<Gamma> this (LVar x) t"
+| "typecheck_lval \<Gamma> this l1 (ArrayT t) \<Longrightarrow> typecheck_expr \<Gamma> this e2 IntT \<Longrightarrow> 
+    typecheck_lval \<Gamma> this (LIndex l1 e2) t"
+| "typecheck_lval \<Gamma> this e (ObjT that) \<Longrightarrow> that x = Some t \<Longrightarrow> typecheck_lval \<Gamma> this (LField e x) t"
+
+inductive typecheck_stmt :: "(variable \<rightharpoonup> type) \<Rightarrow> type \<Rightarrow> type \<Rightarrow> statement \<Rightarrow> bool" where
+  "typecheck_lval \<Gamma> this x t \<Longrightarrow> typecheck_expr \<Gamma> this e t \<Longrightarrow> typecheck_stmt \<Gamma> this out (Let x e)"
+| "typecheck_expr \<Gamma> this e BoolT \<Longrightarrow> \<forall>s' \<in> set s1. typecheck_stmt \<Gamma> this out s' \<Longrightarrow> 
+    \<forall>s' \<in> set s2. typecheck_stmt \<Gamma> this out s' \<Longrightarrow> typecheck_stmt \<Gamma> this out (If e s1 s2)"
+| "typecheck_expr \<Gamma> this e BoolT \<Longrightarrow> \<forall>s' \<in> set s. typecheck_stmt \<Gamma> this out s' \<Longrightarrow> 
+    typecheck_stmt \<Gamma> this out (While e s)"
+| "typecheck_expr \<Gamma> this e (ObjT that) \<Longrightarrow> that x = Some (ArrowT ts UnitT) \<Longrightarrow> 
+    \<forall>(e', t') \<in> set (zip es ts). typecheck_expr \<Gamma> this e' t' \<Longrightarrow> 
+      typecheck_stmt \<Gamma> this out (Do e x es)"
+| "typecheck_expr \<Gamma> this e out \<Longrightarrow> typecheck_stmt \<Gamma> this out (Return e)"
+
+end
