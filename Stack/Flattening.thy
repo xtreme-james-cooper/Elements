@@ -40,7 +40,7 @@ primrec stack_value_convert :: "stack_value \<Rightarrow> int" where
 definition flatten :: "stack_program \<Rightarrow> flat_stack_program" where
   "flatten \<Pi> = (\<lambda>s. case s of 
       CL\<^sub>2 f s \<Rightarrow> (case \<Pi> f of 
-          Some (a, ls, \<Phi>) \<Rightarrow> (case \<Phi> s of
+          Some (a, ls, \<pi>, s'', \<Phi>) \<Rightarrow> (case \<Phi> s of
               Some (\<pi>, s') \<Rightarrow> Some (instruction_convert f 0 ls \<pi>, CL\<^sub>2 f s')
             | None \<Rightarrow> None)
         | None \<Rightarrow> None))"
@@ -79,7 +79,7 @@ lemma [simp]: "eval_flat_stack (flatten \<Pi>) (unboolify b # \<sigma>, FNot # \
     (unboolify (\<not> b) # \<sigma>, \<pi>, s, \<omega>)"
   by (cases b) (metis boolify_def evf_not unboolify_def)+
 
-lemma [simp]: "\<Pi> f = Some (a, l, \<Phi>) \<Longrightarrow> \<Phi> s = Some (\<pi>, s') \<Longrightarrow> 
+lemma [simp]: "\<Pi> f = Some (a, l, \<pi>', s'', \<Phi>) \<Longrightarrow> \<Phi> s = Some (\<pi>, s') \<Longrightarrow> 
     flatten \<Pi> (CL\<^sub>2 f s) = Some (instruction_convert f 0 l \<pi>, CL\<^sub>2 f s')"
   by (simp add: flatten_def)
 
