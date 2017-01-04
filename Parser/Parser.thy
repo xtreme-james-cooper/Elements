@@ -4,35 +4,35 @@ begin
 
 (* basic parsers *)
 
-type_synonym 'a parser = "string \<Rightarrow> ('a \<times> string) option"
+type_synonym ('ch, 'a) parser = "'ch list \<Rightarrow> ('a \<times> 'ch list) option"
 
-primrec item :: "char parser" where
+primrec item :: "('ch, 'ch) parser" where
   "item [] = None" 
 | "item (ch # s) = Some (ch, s)"
 
-fun fmap :: "('a \<Rightarrow> 'b) \<Rightarrow> 'a parser \<Rightarrow> 'b parser" (infix "<$>" 70) where
+fun fmap :: "('a \<Rightarrow> 'b) \<Rightarrow> ('ch, 'a) parser \<Rightarrow> ('ch, 'b) parser" (infix "<$>" 70) where
   "fmap f pa s = (case pa s of Some (a, s') \<Rightarrow> Some (f a, s') | None \<Rightarrow> None)"
 
-fun pure :: "'a \<Rightarrow> 'a parser" where
+fun pure :: "'a \<Rightarrow> ('ch, 'a) parser" where
   "pure a s = Some (a, s)"
 
-fun ap :: "('a \<Rightarrow> 'b) parser \<Rightarrow> 'a parser \<Rightarrow> 'b parser" (infixl "<**>" 70) where
+fun ap :: "('ch, 'a \<Rightarrow> 'b) parser \<Rightarrow> ('ch, 'a) parser \<Rightarrow> ('ch, 'b) parser" (infixl "<**>" 70) where
   "ap pf pa s = (case pf s of 
       Some (f, s') \<Rightarrow> (case pa s' of 
           Some (a, s'') \<Rightarrow> Some (f a, s'') 
         | None \<Rightarrow> None) 
     | None \<Rightarrow> None)"
 
-fun fail :: "'a parser" where
+fun fail :: "('ch, 'a) parser" where
   "fail s = None"
 
-fun alt :: "'a parser \<Rightarrow> 'a parser \<Rightarrow> 'a parser" (infixl "<|>" 60) where
+fun alt :: "('ch, 'a) parser \<Rightarrow> ('ch, 'a) parser \<Rightarrow> ('ch, 'a) parser" (infixl "<|>" 60) where
   "alt a b s = (case a s of Some as \<Rightarrow> Some as | None \<Rightarrow> b s)"
 
-fun sat :: "'a parser \<Rightarrow> ('a \<Rightarrow> bool) \<Rightarrow> 'a parser" (infixl "where" 65) where
+fun sat :: "('ch, 'a) parser \<Rightarrow> ('a \<Rightarrow> bool) \<Rightarrow> ('ch, 'a) parser" (infixl "where" 65) where
   "sat pa f s = (case pa s of Some (a, s') \<Rightarrow> if f a then Some (a, s') else None | None \<Rightarrow> None)"
 
-function many :: "'a parser \<Rightarrow> 'a list parser" where
+function many :: "('ch, 'a) parser \<Rightarrow> ('ch, 'a list) parser" where
   "many pa s = (case pa s of 
       None \<Rightarrow> pure [] s
     | Some (f, s') \<Rightarrow> (
@@ -47,15 +47,21 @@ termination
 
 (* derived parsers *)
 
-definition char_parser :: "char \<Rightarrow> char parser" where
-  "char_parser ch = item where (op = ch)"
+definition constant_parser :: "'ch \<Rightarrow> ('ch, 'ch) parser" where
+  "constant_parser ch = item where (op = ch)"
 
-primrec string_parser :: "string \<Rightarrow> string parser" where
+primrec string_parser :: "'ch list \<Rightarrow> ('ch, 'ch list) parser" where
   "string_parser [] = pure []"
-| "string_parser (ch # s) = pure (op #) <**> char_parser ch <**> string_parser s"
+| "string_parser (ch # s) = pure (op #) <**> constant_parser ch <**> string_parser s"
 
-definition many1 :: "'a parser \<Rightarrow> 'a list parser" where
+definition many1 :: "('ch, 'a) parser \<Rightarrow> ('ch, 'a list) parser" where
   "many1 a = pure (op #) <**> a <**> many a"
+
+definition optional :: "('ch, 'a) parser \<Rightarrow> ('ch, 'a option) parser" where
+  "optional a = (Some <$> a) <|> pure None"
+
+definition deoption :: "('ch, 'a option) parser \<Rightarrow> ('ch, 'a) parser" where
+  "deoption a = the <$> (a where (\<lambda>x. x \<noteq> None))"
 
 (* parser laws *)
 
@@ -107,14 +113,14 @@ lemma [simp]: "fail where p = fail"
 lemma [simp]: "many fail = pure []"
   by auto
 
-lemma [simp]: "char_parser ch (ch # s) = Some (ch, s)"
-  by (simp add: char_parser_def)
+lemma [simp]: "constant_parser ch (ch # s) = Some (ch, s)"
+  by (simp add: constant_parser_def)
 
-lemma [simp]: "ch' \<noteq> ch \<Longrightarrow> char_parser ch (ch' # s) = None"
-  by (simp add: char_parser_def)
+lemma [simp]: "ch' \<noteq> ch \<Longrightarrow> constant_parser ch (ch' # s) = None"
+  by (simp add: constant_parser_def)
 
-lemma [simp]: "char_parser ch [] = None"
-  by (simp add: char_parser_def)
+lemma [simp]: "constant_parser ch [] = None"
+  by (simp add: constant_parser_def)
 
 lemma [simp]: "string_parser s (s @ t) = Some (s, t)"
   by (induction s arbitrary: t) simp_all
@@ -141,5 +147,20 @@ lemma [simp]: "length s' < length s \<Longrightarrow> string_parser s s' = None"
         thus ?case by (cases "ch = ch'") simp_all
       qed
   qed
+
+lemma [simp]: "p s = Some (a, t) \<Longrightarrow> optional p s = Some (Some a, t)"
+  by (simp add: optional_def)
+
+lemma [simp]: "p s = None \<Longrightarrow> optional p s = Some (None, s)"
+  by (simp add: optional_def)
+
+lemma [simp]: "p s = Some (Some a, t) \<Longrightarrow> deoption p s = Some (a, t)"
+  by (simp add: deoption_def)
+
+lemma [simp]: "p s = Some (None, t) \<Longrightarrow> deoption p s = None"
+  by (simp add: deoption_def)
+
+lemma [simp]: "p s = None \<Longrightarrow> deoption p s = None"
+  by (simp add: deoption_def)
 
 end
