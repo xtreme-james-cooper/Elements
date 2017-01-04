@@ -2,7 +2,7 @@ theory JackLanguage
 imports Main
 begin
 
-typedecl variable
+type_synonym variable = string
 
 datatype type = 
   IntT | BoolT | CharT | UnitT 
@@ -51,6 +51,7 @@ record classdecl =
   staticvars :: "(variable \<times> type) list" 
   instancevars :: "(variable \<times> type) list"
   staticfuncs :: "(variable \<times> subroutine) list"
+  constructors :: "(variable \<times> subroutine) list"
   instancefuncs :: "(variable \<times> subroutine) list"
 
 datatype program = Program "(variable \<times> classdecl) list" "statement list"
@@ -110,7 +111,7 @@ inductive typecheck_subr :: "(variable \<rightharpoonup> type) \<Rightarrow> typ
     typecheck_subr \<Gamma> this \<lparr> outtype = t, params = ps, locals = ls, body = sts \<rparr>"
 
 inductive typecheck_class :: "classdecl \<Rightarrow> bool" where
-  "typecheck_class \<lparr> staticvars = svs, instancevars = ivs, staticfuncs = sfs, instancefuncs = ifs \<rparr>"
+  "typecheck_class \<lparr> staticvars = svs, instancevars = ivs, staticfuncs = sfs, constructors = cts, instancefuncs = ifs \<rparr>"
 
 inductive typecheck_program :: "program \<Rightarrow> bool" where
   "\<forall>(n, cl) \<in> set classes. typecheck_class cl \<Longrightarrow> \<forall>s \<in> set main. typecheck_stmt \<Gamma> this t s \<Longrightarrow> 
