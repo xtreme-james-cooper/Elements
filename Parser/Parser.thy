@@ -2,85 +2,57 @@ theory Parser
 imports Main
 begin
 
-(* prelims *)
-
-primrec mapfst :: "('a \<Rightarrow> 'b) \<Rightarrow> ('a \<times> 'c) \<Rightarrow> ('b \<times> 'c)" where
-  "mapfst f (a, c) = (f a, c)"
-
-definition mapmapfst :: "('a \<Rightarrow> 'b) \<Rightarrow> ('a \<times> 'c) set \<Rightarrow> ('b \<times> 'c) set" where
-  "mapmapfst f = op ` (mapfst f)"
-
-lemma [simp]: "op ` f \<circ> op ` g = op ` (f \<circ> g)"
-  by fastforce
-
-lemma [simp]: "mapfst id = id"
-  by auto
-
-lemma [simp]: "mapfst f o mapfst g = mapfst (f o g)"
-  by auto
-
-lemma [simp]: "fst (mapfst f x) = f (fst x)"
-  by (cases x) simp
-
-lemma [simp]: "snd (mapfst f x) = snd x"
-  by (cases x) simp
-
-lemma [simp]: "(a, b) \<in> xs \<Longrightarrow> (a v, b) \<in> mapfst (\<lambda>x. x v) ` xs"
-  proof -
-    assume "(a, b) \<in> xs"
-    moreover have "(a v, b) = mapfst (\<lambda>x. x v) (a, b)" by simp
-    ultimately show ?thesis by fastforce
-  qed
-
-lemma [simp]: "(\<Union>fs \<in> xs. {(fst fs v, snd fs)}) = mapmapfst (\<lambda>x. x v) xs"
-  by (auto simp add: mapmapfst_def)
-
-lemma [simp]: "(\<Union>xa \<in> fs. mapmapfst (fst xa) (\<Union>fs \<in> g (snd xa). mapmapfst (fst fs) (x (snd fs)))) =
-    (\<Union>xa \<in> mapmapfst op \<circ> fs. \<Union>xa \<in> mapmapfst (fst xa) (g (snd xa)). mapmapfst (fst xa) (x (snd xa)))"
-  by (auto simp add: mapmapfst_def) (force+)
-
 (* basic parsers *)
 
-type_synonym 'a parser = "string \<Rightarrow> ('a \<times> string) set"
+type_synonym 'a parser = "string \<Rightarrow> ('a \<times> string) option"
 
-definition item :: "char parser" where
-  "item s = (case s of [] \<Rightarrow> {} | (ch # s') \<Rightarrow>{(ch, s')})"
+primrec item :: "char parser" where
+  "item [] = None" 
+| "item (ch # s) = Some (ch, s)"
 
-definition fmap :: "('a \<Rightarrow> 'b) \<Rightarrow> 'a parser \<Rightarrow> 'b parser" (infix "<$>" 70) where
-  "fmap f af = mapmapfst f o af"
+fun fmap :: "('a \<Rightarrow> 'b) \<Rightarrow> 'a parser \<Rightarrow> 'b parser" (infix "<$>" 70) where
+  "fmap f pa s = (case pa s of Some (a, s') \<Rightarrow> Some (f a, s') | None \<Rightarrow> None)"
 
-definition pure :: "'a \<Rightarrow> 'a parser" where
-  "pure a s = {(a, s)}"
+fun pure :: "'a \<Rightarrow> 'a parser" where
+  "pure a s = Some (a, s)"
 
-definition ap :: "('a \<Rightarrow> 'b) parser \<Rightarrow> 'a parser \<Rightarrow> 'b parser" (infixl "<**>" 70) where
-  "ap ff af = (\<lambda>s. \<Union>fs \<in> ff s. mapmapfst (fst fs) (af (snd fs)))"
+fun ap :: "('a \<Rightarrow> 'b) parser \<Rightarrow> 'a parser \<Rightarrow> 'b parser" (infixl "<**>" 70) where
+  "ap pf pa s = (case pf s of 
+      Some (f, s') \<Rightarrow> (case pa s' of 
+          Some (a, s'') \<Rightarrow> Some (f a, s'') 
+        | None \<Rightarrow> None) 
+    | None \<Rightarrow> None)"
 
-definition fail :: "'a parser" where
-  "fail s = {}"
+fun fail :: "'a parser" where
+  "fail s = None"
 
-definition alt :: "'a parser \<Rightarrow> 'a parser \<Rightarrow> 'a parser" (infixl "<|>" 60) where
-  "alt a b s = a s \<union> b s"
+fun alt :: "'a parser \<Rightarrow> 'a parser \<Rightarrow> 'a parser" (infixl "<|>" 60) where
+  "alt a b s = (case a s of Some as \<Rightarrow> Some as | None \<Rightarrow> b s)"
 
-definition sat :: "'a parser \<Rightarrow> ('a \<Rightarrow> bool) \<Rightarrow> 'a parser" (infixl "where" 65) where
-  "sat a f s = (\<Union>as \<in> a s. if f (fst as) then {as} else {})"
+fun sat :: "'a parser \<Rightarrow> ('a \<Rightarrow> bool) \<Rightarrow> 'a parser" (infixl "where" 65) where
+  "sat pa f s = (case pa s of Some (a, s') \<Rightarrow> if f a then Some (a, s') else None | None \<Rightarrow> None)"
 
 function many :: "'a parser \<Rightarrow> 'a list parser" where
-  "many a s = (
-      if \<forall>s. \<forall>as \<in> a s. length (snd as) < length s
-      then insert ([], s) (\<Union>fs \<in> mapmapfst (op #) (a s). mapmapfst (fst fs) (many a (snd fs)))
-      else undefined)"
+  "many pa s = (case pa s of 
+      None \<Rightarrow> pure [] s
+    | Some (f, s') \<Rightarrow> (
+        if length s' < length s 
+        then case many pa s' of 
+            None \<Rightarrow> pure [] s 
+          | Some (a, s'') \<Rightarrow> Some (op # f a, s'')
+        else undefined))"
   by pat_completeness auto
 termination
-  by (relation "measure (\<lambda>(a, s). length s)") (auto simp add: mapmapfst_def, fastforce)
+  by (relation "measure (\<lambda>(a, s). length s)") auto
 
 (* derived parsers *)
 
-definition char :: "char \<Rightarrow> char parser" where
-  "char ch = item where (op = ch)"
+definition char_parser :: "char \<Rightarrow> char parser" where
+  "char_parser ch = item where (op = ch)"
 
-primrec string :: "string \<Rightarrow> string parser" where
-  "string [] = pure []"
-| "string (ch # s) = pure (op #) <**> char ch <**> string s"
+primrec string_parser :: "string \<Rightarrow> string parser" where
+  "string_parser [] = pure []"
+| "string_parser (ch # s) = pure (op #) <**> char_parser ch <**> string_parser s"
 
 definition many1 :: "'a parser \<Rightarrow> 'a list parser" where
   "many1 a = pure (op #) <**> a <**> many a"
@@ -88,64 +60,86 @@ definition many1 :: "'a parser \<Rightarrow> 'a list parser" where
 (* parser laws *)
 
 lemma [simp]: "fmap id = id"
-  by (auto simp add: fmap_def mapmapfst_def)
+  by rule (auto split: option.splits)
 
 lemma [simp]: "fmap f o fmap g = fmap (f o g)"
-  by (auto simp add: fmap_def o_assoc mapmapfst_def)
+  by rule (auto split: option.splits)
 
 lemma [simp]: "pure id <**> v = v"
-  by (auto simp add: pure_def ap_def mapmapfst_def)
+  by (auto split: option.splits)
 
 lemma [simp]: "pure f <**> pure v = pure (f v)"
-  by (auto simp add: pure_def ap_def mapmapfst_def) 
+  by auto
 
 lemma [simp]: "f <**> pure v = pure (\<lambda>x. x v) <**> f"
-  by (auto simp add: pure_def ap_def mapmapfst_def)
+  by (auto split: option.splits)
 
 lemma [simp]: "f <**> (g <**> x) = pure (op o) <**> f <**> g <**> x"
-  by (auto simp add: pure_def ap_def)
+  by (auto split: option.splits)
 
 lemma [simp]: "g <$> x = pure g <**> x"
-  by (auto simp add: fmap_def pure_def ap_def)
+  by auto
 
 lemma [simp]: "fail <**> p = fail"
-  by (auto simp add: fail_def ap_def)
+  by auto
 
 lemma [simp]: "p <**> fail = fail"
-  by (auto simp add: fail_def ap_def mapmapfst_def)
+  by (auto split: option.splits)
 
 lemma [simp]: "fail <|> p = p"
-  by (auto simp add: fail_def alt_def)
+  by auto
 
 lemma [simp]: "p <|> fail = p"
-  by (auto simp add: fail_def alt_def)
+  by (auto split: option.splits)
 
 lemma [simp]: "a <|> (b <|> c) = a <|> b <|> c"
-  by (auto simp add: alt_def)
-
-lemma [simp]: "(a <|> c) <**> b = a <**> b <|> c <**> b"
-  by rule (auto simp add: ap_def alt_def)
+  by (auto split: option.splits)
 
 lemma [simp]: "a <**> (b <|> c) = a <**> b <|> a <**> c"
-  by (auto simp add: ap_def alt_def, rule) (auto simp add: alt_def mapmapfst_def)
+  by (auto split: option.splits)
 
 lemma [simp]: "pure x where p = (if p x then pure x else fail)"
-  by (auto simp add: pure_def fail_def sat_def)
+  by auto
 
 lemma [simp]: "fail where p = fail"
-  by (auto simp add: fail_def sat_def)
-
-lemma [simp]: "(a <|> b) where p = a where p <|> b where p"
-  by (auto simp add: alt_def sat_def)
+  by auto
 
 lemma [simp]: "many fail = pure []"
-  proof
-    fix s
-    have "(
-      if \<forall>s. \<forall>as \<in> fail s. length (snd as) < length s
-      then insert ([], s) (\<Union>fs \<in> mapmapfst (op #) (fail s). mapmapfst (fst fs) (many fail (snd fs)))
-      else undefined) = pure [] s" by (simp add: pure_def fail_def mapmapfst_def del: many.simps)
-    thus "many fail s = pure [] s" by simp
+  by auto
+
+lemma [simp]: "char_parser ch (ch # s) = Some (ch, s)"
+  by (simp add: char_parser_def)
+
+lemma [simp]: "ch' \<noteq> ch \<Longrightarrow> char_parser ch (ch' # s) = None"
+  by (simp add: char_parser_def)
+
+lemma [simp]: "char_parser ch [] = None"
+  by (simp add: char_parser_def)
+
+lemma [simp]: "string_parser s (s @ t) = Some (s, t)"
+  by (induction s arbitrary: t) simp_all
+
+lemma [simp]: "length s = length s' \<Longrightarrow> s \<noteq> s' \<Longrightarrow> string_parser s (s' @ t) = None"
+  proof (induction s arbitrary: s' t)
+  case Nil
+    thus ?case by simp
+  next case (Cons ch s)
+    then obtain ch' s'' where "s' = ch' # s''" by (metis length_Suc_conv)
+    with Cons show ?case by (cases "ch = ch'") simp_all
+  qed
+
+lemma [simp]: "length s' < length s \<Longrightarrow> string_parser s s' = None"
+  proof (induction s arbitrary: s')
+  case Nil
+    thus ?case by simp
+  next case (Cons ch s)
+    thus ?case
+      proof (induction s')
+      case Nil
+        thus ?case by simp
+      next case (Cons ch' s')
+        thus ?case by (cases "ch = ch'") simp_all
+      qed
   qed
 
 end
