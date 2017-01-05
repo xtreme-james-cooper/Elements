@@ -39,7 +39,7 @@ datatype statement =
 | If expression "statement list" "statement list"
 | While expression "statement list"
 | Do expression variable "expression list"
-| Return expression
+| Return "expression option"
 
 record subroutine = 
   outtype :: type

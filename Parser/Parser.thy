@@ -32,20 +32,16 @@ fun alt :: "('ch, 'a) parser \<Rightarrow> ('ch, 'a) parser \<Rightarrow> ('ch, 
 fun sat :: "('ch, 'a) parser \<Rightarrow> ('a \<Rightarrow> bool) \<Rightarrow> ('ch, 'a) parser" (infixl "where" 65) where
   "sat pa f s = (case pa s of Some (a, s') \<Rightarrow> if f a then Some (a, s') else None | None \<Rightarrow> None)"
 
-function many :: "('ch, 'a) parser \<Rightarrow> ('ch, 'a list) parser" where
-  "many pa s = (case pa s of 
-      None \<Rightarrow> pure [] s
-    | Some (f, s') \<Rightarrow> (
-        if length s' < length s 
-        then case many pa s' of 
-            None \<Rightarrow> pure [] s 
-          | Some (a, s'') \<Rightarrow> Some (op # f a, s'')
-        else undefined))"
+function pfix :: "(('ch, 'a) parser \<Rightarrow> ('ch, 'a) parser) \<Rightarrow> ('ch, 'a) parser" where
+  "pfix f s = f (\<lambda>s'. if length s' < length s then pfix f s' else None) s"
   by pat_completeness auto
 termination
-  by (relation "measure (\<lambda>(a, s). length s)") auto
+  by (relation "measure (\<lambda>(f, s). length s)") auto
 
 (* derived parsers *)
+
+definition many :: "('ch, 'a) parser \<Rightarrow> ('ch, 'a list) parser" where
+  "many pa = pfix (\<lambda>many. (op #) <$> pa <**> many <|> pure [])"
 
 definition constant_parser :: "'ch \<Rightarrow> ('ch, 'ch) parser" where
   "constant_parser ch = item where (op = ch)"
@@ -108,9 +104,6 @@ lemma [simp]: "pure x where p = (if p x then pure x else fail)"
   by auto
 
 lemma [simp]: "fail where p = fail"
-  by auto
-
-lemma [simp]: "many fail = pure []"
   by auto
 
 lemma [simp]: "constant_parser ch (ch # s) = Some (ch, s)"
