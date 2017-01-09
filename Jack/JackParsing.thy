@@ -15,23 +15,66 @@ fun get_variable :: "token \<Rightarrow> variable option" where
   "get_variable (Sym s) = (if s \<in> keywords then None else Some s)"
 | "get_variable _ = None"
 
+fun get_number :: "token \<Rightarrow> nat option" where
+  "get_number (Num n) = Some n"
+| "get_number _ = None"
+
+fun get_string :: "token \<Rightarrow> string option" where
+  "get_string (String s) = Some s"
+| "get_string _ = None"
+
 definition variable_parser :: "(token, variable) parser" where
   "variable_parser = deoption (get_variable <$> item)"
 
+definition number_parser :: "(token, nat) parser" where
+  "number_parser = deoption (get_number <$> item)"
 
+definition string_parser :: "(token, string) parser" where
+  "string_parser = deoption (get_string <$> item)"
 
+definition binop_parser :: "(token, binop) parser" where
+  "binop_parser = 
+    (\<lambda>x. Plus) <$> constant_parser PlusSign <|> 
+    (\<lambda>x. Minus) <$> constant_parser Hyphen <|> 
+    (\<lambda>x. Times) <$> constant_parser Star <|> 
+    (\<lambda>x. Div) <$> constant_parser Slash <|> 
+    (\<lambda>x. And) <$> constant_parser Ampersand <|> 
+    (\<lambda>x. Or) <$> constant_parser Pipe <|> 
+    (\<lambda>x. Eq) <$> constant_parser Equals <|> 
+    (\<lambda>x. Lt) <$> constant_parser LAngle <|> 
+    (\<lambda>x. Gt) <$> constant_parser RAngle"
 
 definition subr_call_parser :: "(token, expression \<times> variable \<times> expression list) parser" where
   "subr_call_parser = undefined"
 
+definition term_parser :: "(token, expression) parser \<Rightarrow> (token, expression) parser" where
+  "term_parser expression_parser = pfix (\<lambda>term_parser.
+    (IConst o int) <$> number_parser <|>
+    SConst <$> string_parser <|>
+    (\<lambda>_. BConst True) <$> constant_parser (Sym ''true'') <|>
+    (\<lambda>_. BConst False) <$> constant_parser (Sym ''false'') <|>
+    (\<lambda>_. Null) <$> constant_parser (Sym ''null'') <|>
+    (\<lambda>_. This) <$> constant_parser (Sym ''this'') <|>
+    Var <$> variable_parser <|>
+    (\<lambda>e1 _ e2 _. Index e1 e2) <$> 
+      expression_parser <**> 
+      constant_parser LSquare <**> 
+      expression_parser <**> 
+      constant_parser RSquare <|>
+    (\<lambda>e _ x. Field e x) <$> 
+      expression_parser <**> 
+      constant_parser Period <**> 
+      variable_parser <|> 
+    (\<lambda>_ e. Negate e) <$> constant_parser Hyphen <**> term_parser <|>
+    (\<lambda>_ e. Not e) <$> constant_parser Tilde <**> term_parser <|>
+    (\<lambda>_ e _. e) <$> constant_parser LParen <**> expression_parser <**> constant_parser RParen) <|>
+    (\<lambda>(e, x, es). Call e x es) <$> subr_call_parser"
+
 definition expression_parser :: "(token, expression) parser" where
-  "expression_parser = undefined"
-
-
-
-
-
-
+  "expression_parser = pfix (\<lambda>expression_parser. 
+    (foldl (\<lambda>e1 (b, e2). Binop b e1 e2)) <$>
+    term_parser expression_parser <**>
+    many (Pair <$> binop_parser <**> term_parser expression_parser))"
 
 definition index_parser :: "(token, expression + variable) parser" where
   "index_parser =

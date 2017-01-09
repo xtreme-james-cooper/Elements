@@ -21,8 +21,8 @@ datatype token =
   Sym string
 | Num nat
 | String string
-| LCurly | RCurly | LParen | RParen | LSquare | RSquare | Period | Comma | Semicolon | Plus | Hyphen
-| Star | Slash | Ampersand | Pipe | LAngle | RAngle | Equals | Tilde
+| LCurly | RCurly | LParen | RParen | LSquare | RSquare | Period | Comma | Semicolon | PlusSign 
+| Hyphen | Star | Slash | Ampersand | Pipe | LAngle | RAngle | Equals | Tilde
 
 definition symbol_parser :: "(char, string) parser" where
   "symbol_parser = 
@@ -54,7 +54,7 @@ definition other_parser :: "(char, token) parser" where
     ((\<lambda>x. Period) <$> constant_parser CHR ''.'') <|>
     ((\<lambda>x. Comma) <$> constant_parser CHR '','') <|>
     ((\<lambda>x. Semicolon) <$> constant_parser CHR '';'') <|>
-    ((\<lambda>x. Plus) <$> constant_parser CHR ''+'') <|>
+    ((\<lambda>x. PlusSign) <$> constant_parser CHR ''+'') <|>
     ((\<lambda>x. Hyphen) <$> constant_parser CHR ''-'') <|>
     ((\<lambda>x. Star) <$> constant_parser CHR ''*'') <|>
     ((\<lambda>x. Slash) <$> constant_parser CHR ''/'') <|>
