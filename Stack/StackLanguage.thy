@@ -76,17 +76,13 @@ inductive eval_stack :: "stack_program \<Rightarrow> stack_state \<Rightarrow> s
 | evs_goto [simp]: "\<Pi> (frame.name f) = Some def \<Longrightarrow> stack_function_def.other_code def s = Some \<pi>' \<Longrightarrow> 
     eval_stack \<Pi> ([], f # \<phi>, (Goto s # \<pi>, _), \<omega>) ([], f # \<phi>, \<pi>', \<omega>)"
 | evs_call [simp]: "\<Pi> f = Some def \<Longrightarrow> length \<sigma> \<ge> stack_function_def.arity def \<Longrightarrow> 
-    eval_stack \<Pi> (\<sigma>, \<phi>, (Call f # \<pi>', s), \<omega>) ([], \<lparr> name = f, arguments = take a \<sigma>, 
-      locals = repeat (IntV 0) l, saved_stack = (drop a \<sigma>), saved_code = (\<pi>', s) \<rparr> # \<phi>, \<pi>, s', \<omega>)"
-
-
-(*
-
-
-| evs_return [simp]: "eval_stack \<Pi> (v # [], f # \<phi>, Return # \<pi>, s, \<omega>) 
-    (v # frame.saved_stack f, \<phi>, fst (frame.saved_code f), snd (frame.saved_code f), \<omega>)"
-| evs_print [simp]: "eval_stack \<Pi> (IntV i1 # \<sigma>, \<phi>, Print # \<pi>, s, \<omega>) (\<sigma>, \<phi>, \<pi>, s, i1 # \<omega>)"
-*)
+    eval_stack \<Pi> (\<sigma>, \<phi>, (Call f # \<pi>', s), \<omega>) ([], \<lparr> 
+      name = f, arguments = take (stack_function_def.arity def) \<sigma>, 
+      locals = repeat (IntV 0) (stack_function_def.local_count def), 
+      saved_stack = (drop (stack_function_def.arity def) \<sigma>), saved_code = (\<pi>', s) \<rparr> # \<phi>, \<pi>, \<omega>)"
+| evs_return [simp]: "eval_stack \<Pi> (v # [], f # \<phi>, (Return # \<pi>, s), \<omega>) 
+    (v # frame.saved_stack f, \<phi>, frame.saved_code f, \<omega>)"
+| evs_print [simp]: "eval_stack \<Pi> (IntV i1 # \<sigma>, \<phi>, (Print # \<pi>, s), \<omega>) (\<sigma>, \<phi>, (\<pi>, s), i1 # \<omega>)"
 
 fun stack_output :: "stack_state \<Rightarrow> output" where
   "stack_output (\<sigma>, \<phi>, \<pi>, \<omega>) = \<omega>"
